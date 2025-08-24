@@ -1,0 +1,119 @@
+#pragma once
+#include <string>
+#include <vector>
+#include <optional>
+#include <limits>
+
+// A move in the game.
+// The user of this library MUST define the contents of this struct
+// to hold the state required for a move in their specific game.
+// For example, for chess, this might contain from/to squares and promotion info.
+// For Tic-Tac-Toe, it might just contain a row and column.
+struct move_t {
+    
+};
+
+
+enum player {
+    A=1, B=2, NONE=0
+};
+
+
+// Abstract base class for a game board.
+// Any game using this minimax library must inherit from this class
+// and implement all pure virtual functions.
+struct board_t {
+
+    // returns an an array of all possible moves for the player's turn, ordered such that the most promising moves are first. 
+    virtual std::vector<move_t> findMoves() {}
+
+    virtual std::string toString() {
+        return "NO GAME STR REPRESENTATION";
+    }
+    
+    // applies the move to the board
+    virtual void makeMove(move_t m) {}
+
+    // undos the move
+    virtual void undoMove(move_t m) {}
+
+    // checks whether a player won. Returns the player.
+    virtual player checkWin() {}
+
+    // assigns a heuristic score to the board, where positive is player 1 and negative is player 2. 
+    // Values should be scaled between -1 and 1.
+    virtual double heuristic() {}
+
+};
+
+
+// Runs the minimax algorithm on a given board
+// Returns the heuristic score of the best move.
+// if bestMoveRet is not nullptr, populates it with the best move found.
+double minimax(board_t& board, player player, int halfMoveNum, int maxHalfMoveNum, move_t* bestMoveRet) {
+
+    auto pwin = board.checkWin();
+
+
+
+    if (pwin != player::NONE) {
+        return (pwin == player::A ? 1 : -1);
+    }
+
+    if (halfMoveNum >= maxHalfMoveNum) {
+        // depth limit
+        return board.heuristic();
+    }
+
+
+
+    std::vector<move_t> moves = board.findMoves();
+
+    // check for draw by no moves left
+    if (moves.size() == 0) {
+        return 0;
+    }
+
+    move_t bestmove = moves[0];
+    double bestscore;
+
+    if (player == player::A) {
+        // set worst score so that first move is always taken
+        bestscore = -std::numeric_limits<double>::infinity();
+
+        // go through moves
+        for(int i = 0; i < moves.size(); i++) {
+            // check the move
+            board.makeMove(moves[i]);
+            double newscore = minimax(board, player::B, halfMoveNum+1, maxHalfMoveNum, nullptr);
+            board.undoMove(moves[i]);
+            // update score and move if needed
+            if (bestscore < newscore) {
+                bestscore = newscore;
+                bestmove = moves[i];
+            }
+        }
+    }
+    if (player == player::B) {
+        // set worst score so that first move is always taken
+        bestscore = std::numeric_limits<double>::infinity();
+
+        // go through moves
+        for(int i = 0; i < moves.size(); i++) {
+            // check the move
+            board.makeMove(moves[i]);
+            double newscore = minimax(board, player::A, halfMoveNum+1, maxHalfMoveNum, nullptr);
+            board.undoMove(moves[i]);
+            // update score and move if needed
+            if (bestscore > newscore) {
+                bestscore = newscore;
+                bestmove = moves[i];
+            }
+        }
+    }
+
+    if (bestMoveRet != nullptr) *bestMoveRet = bestmove;
+    return bestscore;
+
+}
+
