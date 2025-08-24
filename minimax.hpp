@@ -5,12 +5,7 @@
 #include <limits>
 #include <cstdint>
 
-// A move in the game.
-// The user of this library MUST define the contents of this struct
-// to hold the state required for a move in their specific game.
-// For example, for chess, this might contain from/to squares and promotion info.
-// For Tic-Tac-Toe, it might just contain a row and column.
-
+#define ALPHABETAPRUNING true
 
 
 enum player {
@@ -47,12 +42,17 @@ struct stat_t {
     uint64_t nodesExplored = 0;
 };
 
+template<typename MoveType>
+double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int maxHalfMoveNum, MoveType* bestMoveRet, stat_t& stats) {
+    return minimax<MoveType>(board, player, halfMoveNum, maxHalfMoveNum, bestMoveRet, stats, -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity());
+}
+
 
 // Runs the minimax algorithm on a given board
 // Returns the heuristic score of the best move.
 // if bestMoveRet is not nullptr, populates it with the best move found.
 template<typename MoveType>
-double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int maxHalfMoveNum, MoveType* bestMoveRet, stat_t& stats) {
+double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int maxHalfMoveNum, MoveType* bestMoveRet, stat_t& stats, double alpha, double beta) {
 
     auto pwin = board.checkWin();
 
@@ -88,13 +88,21 @@ double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int max
             stats.nodesExplored++;
             // check the move
             board.makeMove(moves[i]);
-            double newscore = minimax<MoveType>(board, player::B, halfMoveNum+1, maxHalfMoveNum, nullptr, stats);
+            double newscore = minimax<MoveType>(board, player::B, halfMoveNum+1, maxHalfMoveNum, nullptr, stats, alpha, beta);
             board.undoMove(moves[i]);
             // update score and move if needed
             if (bestscore < newscore) {
                 bestscore = newscore;
                 bestmove = moves[i];
             }
+
+            #if ALPHABETAPRUNING
+            // update alpha
+            alpha = std::max(alpha, bestscore);
+            if (alpha >= beta) {
+                break; // Prune the remaining branches
+            }
+            #endif
         }
     }
     if (player == player::B) {
@@ -106,13 +114,21 @@ double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int max
             stats.nodesExplored++;
             // check the move
             board.makeMove(moves[i]);
-            double newscore = minimax<MoveType>(board, player::A, halfMoveNum+1, maxHalfMoveNum, nullptr, stats);
+            double newscore = minimax<MoveType>(board, player::A, halfMoveNum+1, maxHalfMoveNum, nullptr, stats, alpha, beta);
             board.undoMove(moves[i]);
             // update score and move if needed
             if (bestscore > newscore) {
                 bestscore = newscore;
                 bestmove = moves[i];
             }
+
+            #if ALPHABETAPRUNING
+            // update beta
+            beta = std::min(beta, bestscore);
+            if (beta <= alpha) {
+                break; // Prune the remaining branches
+            }
+            #endif
         }
     }
 
