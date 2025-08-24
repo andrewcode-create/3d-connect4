@@ -10,9 +10,7 @@
 // to hold the state required for a move in their specific game.
 // For example, for chess, this might contain from/to squares and promotion info.
 // For Tic-Tac-Toe, it might just contain a row and column.
-struct move_t {
-    
-};
+
 
 
 enum player {
@@ -23,27 +21,25 @@ enum player {
 // Abstract base class for a game board.
 // Any game using this minimax library must inherit from this class
 // and implement all pure virtual functions.
+template<typename MoveType>
 struct board_t {
+    virtual ~board_t() = default;
 
     // returns an an array of all possible moves for the player's turn, ordered such that the most promising moves are first. 
-    virtual std::vector<move_t> findMoves() {}
+    virtual std::vector<MoveType> findMoves() {}
+    // applies the move to the board
+    virtual void makeMove(MoveType m) {}
+    // undos the move
+    virtual void undoMove(MoveType m) {}
+    // checks whether a player won. Returns the player.
+    virtual player checkWin() {}
+    // assigns a heuristic score to the board, where positive is player 1 and negative is player 2. 
+    // Values should be scaled between -1 and 1.
+    virtual double heuristic() {}
 
     virtual std::string toString() {
         return "NO GAME STR REPRESENTATION";
     }
-    
-    // applies the move to the board
-    virtual void makeMove(move_t m) {}
-
-    // undos the move
-    virtual void undoMove(move_t m) {}
-
-    // checks whether a player won. Returns the player.
-    virtual player checkWin() {}
-
-    // assigns a heuristic score to the board, where positive is player 1 and negative is player 2. 
-    // Values should be scaled between -1 and 1.
-    virtual double heuristic() {}
 
 };
 
@@ -55,7 +51,8 @@ struct stat_t {
 // Runs the minimax algorithm on a given board
 // Returns the heuristic score of the best move.
 // if bestMoveRet is not nullptr, populates it with the best move found.
-double minimax(board_t& board, player player, int halfMoveNum, int maxHalfMoveNum, move_t* bestMoveRet, stat_t& stats) {
+template<typename MoveType>
+double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int maxHalfMoveNum, MoveType* bestMoveRet, stat_t& stats) {
 
     auto pwin = board.checkWin();
 
@@ -72,14 +69,14 @@ double minimax(board_t& board, player player, int halfMoveNum, int maxHalfMoveNu
 
 
 
-    std::vector<move_t> moves = board.findMoves();
+    std::vector<MoveType> moves = board.findMoves();
 
     // check for draw by no moves left
     if (moves.size() == 0) {
         return 0;
     }
 
-    move_t bestmove = moves[0];
+    MoveType bestmove = moves[0];
     double bestscore;
 
     if (player == player::A) {
