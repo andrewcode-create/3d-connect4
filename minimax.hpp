@@ -21,7 +21,7 @@ struct board_t {
     virtual ~board_t() = default;
 
     // returns an an array of all possible moves for the player's turn, ordered such that the most promising moves are first. 
-    virtual std::vector<MoveType> findMoves() = 0;
+    virtual std::vector<MoveType> findMoves(player play) = 0;
     // applies the move to the board
     virtual void makeMove(MoveType m) = 0;
     // undos the move
@@ -69,7 +69,7 @@ double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int max
 
 
 
-    std::vector<MoveType> moves = board.findMoves();
+    std::vector<MoveType> moves = board.findMoves(player);
 
     // check for draw by no moves left
     if (moves.size() == 0) {
