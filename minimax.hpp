@@ -26,16 +26,16 @@ struct board_t {
     virtual ~board_t() = default;
 
     // returns an an array of all possible moves for the player's turn, ordered such that the most promising moves are first. 
-    virtual std::vector<MoveType> findMoves() {}
+    virtual std::vector<MoveType> findMoves() = 0;
     // applies the move to the board
-    virtual void makeMove(MoveType m) {}
+    virtual void makeMove(MoveType m) = 0;
     // undos the move
-    virtual void undoMove(MoveType m) {}
+    virtual void undoMove(MoveType m) = 0;
     // checks whether a player won. Returns the player.
-    virtual player checkWin() {}
+    virtual player checkWin() = 0;
     // assigns a heuristic score to the board, where positive is player 1 and negative is player 2. 
     // Values should be scaled between -1 and 1.
-    virtual double heuristic() {}
+    virtual double heuristic() = 0;
 
     virtual std::string toString() {
         return "NO GAME STR REPRESENTATION";
@@ -88,7 +88,7 @@ double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int max
             stats.nodesExplored++;
             // check the move
             board.makeMove(moves[i]);
-            double newscore = minimax(board, player::B, halfMoveNum+1, maxHalfMoveNum, nullptr, stats);
+            double newscore = minimax<MoveType>(board, player::B, halfMoveNum+1, maxHalfMoveNum, nullptr, stats);
             board.undoMove(moves[i]);
             // update score and move if needed
             if (bestscore < newscore) {
@@ -106,7 +106,7 @@ double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int max
             stats.nodesExplored++;
             // check the move
             board.makeMove(moves[i]);
-            double newscore = minimax(board, player::A, halfMoveNum+1, maxHalfMoveNum, nullptr, stats);
+            double newscore = minimax<MoveType>(board, player::A, halfMoveNum+1, maxHalfMoveNum, nullptr, stats);
             board.undoMove(moves[i]);
             // update score and move if needed
             if (bestscore > newscore) {
