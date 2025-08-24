@@ -3,6 +3,7 @@
 #include <vector>
 #include <optional>
 #include <limits>
+#include <cstdint>
 
 // A move in the game.
 // The user of this library MUST define the contents of this struct
@@ -46,11 +47,15 @@ struct board_t {
 
 };
 
+struct stat_t {
+    uint64_t nodesExplored = 0;
+};
+
 
 // Runs the minimax algorithm on a given board
 // Returns the heuristic score of the best move.
 // if bestMoveRet is not nullptr, populates it with the best move found.
-double minimax(board_t& board, player player, int halfMoveNum, int maxHalfMoveNum, move_t* bestMoveRet) {
+double minimax(board_t& board, player player, int halfMoveNum, int maxHalfMoveNum, move_t* bestMoveRet, stat_t& stats) {
 
     auto pwin = board.checkWin();
 
@@ -83,9 +88,10 @@ double minimax(board_t& board, player player, int halfMoveNum, int maxHalfMoveNu
 
         // go through moves
         for(int i = 0; i < moves.size(); i++) {
+            stats.nodesExplored++;
             // check the move
             board.makeMove(moves[i]);
-            double newscore = minimax(board, player::B, halfMoveNum+1, maxHalfMoveNum, nullptr);
+            double newscore = minimax(board, player::B, halfMoveNum+1, maxHalfMoveNum, nullptr, stats);
             board.undoMove(moves[i]);
             // update score and move if needed
             if (bestscore < newscore) {
@@ -100,9 +106,10 @@ double minimax(board_t& board, player player, int halfMoveNum, int maxHalfMoveNu
 
         // go through moves
         for(int i = 0; i < moves.size(); i++) {
+            stats.nodesExplored++;
             // check the move
             board.makeMove(moves[i]);
-            double newscore = minimax(board, player::A, halfMoveNum+1, maxHalfMoveNum, nullptr);
+            double newscore = minimax(board, player::A, halfMoveNum+1, maxHalfMoveNum, nullptr, stats);
             board.undoMove(moves[i]);
             // update score and move if needed
             if (bestscore > newscore) {
