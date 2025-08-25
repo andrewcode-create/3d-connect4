@@ -1,12 +1,12 @@
 //#include "tictactoe.hpp"
-#include "3d-connect4.hpp"
+#include "3d-connect4-bitboard.hpp"
 #include <iostream>
 
 int main() {
 
     connect3dBoard board;
 
-    connect3dMove bestMove = connect3dMove(0,0,'Z');
+    connect3dMove bestMove;// = connect3dMove(0,0,'Z');
 
     stat_t stats;
 
@@ -18,7 +18,8 @@ int main() {
         std::cout << "Move " << i+1 << '\n';
         stats.nodesExplored = 0;
         score = minimax(board, (i % 2 == 0 ? player::A : player::B), 0, halfMovesToCheck, &bestMove, stats);
-        std::cout << "AI chooses move to (" << bestMove.row << ", " << bestMove.col << ") with score " << score << "\n";
+        //std::cout << "BLAHHHHH!";
+        std::cout << "AI chooses move to (" << bestMove.move << ") with score " << score << "\n";
         std::cout << "stats:" << stats.nodesExplored << "\n";
         board.makeMove(bestMove);
         std::cout << board.toString();

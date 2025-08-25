@@ -9,7 +9,7 @@
 
 
 enum player {
-    A=1, B=2, NONE=0
+    A='A', B='B', NONE=0
 };
 
 
@@ -55,8 +55,6 @@ template<typename MoveType>
 double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int maxHalfMoveNum, MoveType* bestMoveRet, stat_t& stats, double alpha, double beta, MoveType* lastMove) {
 
     auto pwin = board.checkWin(lastMove);
-
-
 
     if (pwin != player::NONE) {
         return (pwin == player::A ? 1 : -1);

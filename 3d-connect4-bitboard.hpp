@@ -1,0 +1,203 @@
+#include "minimax.hpp" 
+#include <vector>
+#include <sstream>
+#include <array> 
+#include <iostream>
+
+
+struct connect3dMove {
+    uint64_t move = 0;
+    player p = player::NONE;
+    connect3dMove(short r, short c, short d, player p) {
+        move = 0b1 << (d*16+r*4+c);
+        this->p = p;
+    }
+    connect3dMove(uint64_t move, player p) {
+        this->move = move;
+        this->p = p;
+    }
+    connect3dMove() = default;
+};
+
+
+class connect3dBoard : public board_t<connect3dMove> {
+private:
+    // goes like this: r0c0d0 r0c1d0 r0c2d0 r0c3d0 r1c0d0 r1c1d0 ... r3c3d0 r0c0d1 r0c1d1 ... r3c3d3
+    // bottom is d0, top is d3
+    uint64_t boardA = 0;
+    uint64_t boardB = 0;
+
+    static constexpr uint64_t pos(short r, short c, short d) {
+        return 1ULL << (d * 16 + r * 4 + c);
+    }
+
+    // A static array to hold all 76 winning line masks.
+    // This is pre-calculated once and shared by all instances of the class.
+    static constexpr std::array<uint64_t, 76> win_masks = [] {
+
+        auto pos = [](short r, short c, short d) constexpr {
+            return 1ULL << (d * 16 + r * 4 + c);
+        };
+        
+        std::array<uint64_t, 76> masks = {};
+        int count = 0;
+
+        // 1. Stacks (vertical through planes) - 16 lines
+        for (int r = 0; r < 4; r++) {
+            for (int c = 0; c < 4; c++) {
+                masks[count++] = pos(r, c, 0) | pos(r, c, 1) | pos(r, c, 2) | pos(r, c, 3);
+            }
+        }
+
+        // 2. In-plane rows - 16 lines
+        for (int d = 0; d < 4; d++) {
+            for (int r = 0; r < 4; r++) {
+                masks[count++] = pos(r, 0, d) | pos(r, 1, d) | pos(r, 2, d) | pos(r, 3, d);
+            }
+        }
+
+        // 3. In-plane columns - 16 lines
+        for (int d = 0; d < 4; d++) {
+            for (int c = 0; c < 4; c++) {
+                masks[count++] = pos(0, c, d) | pos(1, c, d) | pos(2, c, d) | pos(3, c, d);
+            }
+        }
+
+        // 4. In-plane diagonals - 8 lines
+        for (int d = 0; d < 4; d++) {
+            masks[count++] = pos(0, 0, d) | pos(1, 1, d) | pos(2, 2, d) | pos(3, 3, d);
+            masks[count++] = pos(0, 3, d) | pos(1, 2, d) | pos(2, 1, d) | pos(3, 0, d);
+        }
+
+        // 5. Inter-plane diagonals (stairs)
+        // Row-stairs - 8 lines
+        for (int r = 0; r < 4; r++) {
+            masks[count++] = pos(r, 0, 0) | pos(r, 1, 1) | pos(r, 2, 2) | pos(r, 3, 3);
+            masks[count++] = pos(r, 0, 3) | pos(r, 1, 2) | pos(r, 2, 1) | pos(r, 3, 0);
+        }
+        // Col-stairs - 8 lines
+        for (int c = 0; c < 4; c++) {
+            masks[count++] = pos(0, c, 0) | pos(1, c, 1) | pos(2, c, 2) | pos(3, c, 3);
+            masks[count++] = pos(0, c, 3) | pos(1, c, 2) | pos(2, c, 1) | pos(3, c, 0);
+        }
+
+        // 6. Main space diagonals - 4 lines
+        masks[count++] = pos(0, 0, 0) | pos(1, 1, 1) | pos(2, 2, 2) | pos(3, 3, 3);
+        masks[count++] = pos(0, 0, 3) | pos(1, 1, 2) | pos(2, 2, 1) | pos(3, 3, 0);
+        masks[count++] = pos(0, 3, 0) | pos(1, 2, 1) | pos(2, 1, 2) | pos(3, 0, 3);
+        masks[count++] = pos(3, 0, 0) | pos(2, 1, 1) | pos(1, 2, 2) | pos(0, 3, 3);
+
+        return masks;
+    }();
+
+
+public:
+    connect3dBoard() = default;
+
+    std::vector<connect3dMove> findMoves(player play) override {
+
+        // find all possible moves
+        std::vector<connect3dMove> moves = std::vector<connect3dMove>();
+        moves.reserve(16);
+        /*
+        
+        // all used spaces
+        uint64_t boards = boardA | boardB;
+
+        // all empty spaces
+        uint64_t empty = ~boards;
+
+        // all spaces exactly 1 above a piece, plus the bottom 
+        // TODO: is this wrong????
+        uint64_t oneAbove = (boards << 16) | 0xFFFFULL;
+
+        // all spaces exactly 1 above a peice and empty
+        uint64_t movebits = oneAbove & empty;
+        //std::cout << "movebits: " << movebits << '\n';
+
+        // take all used spaces, raise them by 1, then remove that from the empty spaces
+        //uint64_t movebits = (~(boards>>16))&empty;
+        
+        for (uint8_t i = 0; i < 64; i++) {
+            if((movebits>>i & 0b1) == 1) moves.push_back(connect3dMove(movebits & (0b1ULL<<i), play));
+            
+        }
+            */
+        uint64_t boards = boardA | boardB;
+        for (int r = 0; r < 4; r++) {
+            for (int c = 0; c < 4; c++) {
+                int d;
+                for (d = 0; d<4; d++) {
+                    if ((boards&pos(r,c,d))==0ULL) {
+                        moves.push_back(connect3dMove(pos(r,c,d), play));
+                        break;
+                    }
+                }
+            }
+        }
+        //std::cout << "len moves: " << moves.size() << '\n';
+        return moves;
+    }
+
+    void makeMove(connect3dMove m) override {
+        if (m.p == player::A) boardA |= m.move;
+        else if (m.p == player::B) boardB |= m.move;
+        else std::cerr<<"ERR MAKE MOVE";
+    }
+
+    void undoMove(connect3dMove m) override {
+        if (m.p == player::A) boardA ^= m.move;
+        else if (m.p == player::B) boardB ^= m.move;
+        else std::cerr<<"ERR UNDO MOVE";
+    }
+
+    player checkWin(const connect3dMove* m) override {
+        if (m == nullptr || m->p == player::A) {
+            for(int i = 0; i < 76; i++) {
+                if ((boardA&win_masks[i]) == win_masks[i]) {
+                    return player::A;
+                }
+            }
+        } else {
+            for(int i = 0; i < 76; i++) {
+                if ((boardB&win_masks[i]) == win_masks[i]) {
+                    return player::B;
+                }
+            }
+        }
+        
+        return player::NONE;
+    }
+
+    double heuristic() override {
+        // no heuristic, so return 0 for draw
+        return 0;
+    }
+    std::string toString() override {
+        std::stringstream ss;
+        ss << "3D Connect Four Board (view from top):\n\n";
+        uint64_t occupied = boardA | boardB;
+
+        for (int d = 3; d >= 0; d--) {
+            ss << "Layer " << d + 1 << (d == 3 ? " (Top)" : "") << (d == 0 ? " (Bottom)" : "") << "\n";
+            ss << "  ---------------\n";
+            for (int r = 0; r < 4; r++) {
+                ss << r << " | ";
+                for (int c = 0; c < 4; c++) {
+                    uint64_t bit = pos(r, c, d);
+                    if ((boardA & bit) != 0) {
+                        ss << "A ";
+                    } else if ((boardB & bit) != 0) {
+                        ss << "B ";
+                    } else {
+                        ss << "- ";
+                    }
+                }
+                ss << "|\n";
+            }
+            ss << "  ---------------\n";
+            ss << "    0 1 2 3\n\n";
+        }
+        return ss.str();
+    }
+};
