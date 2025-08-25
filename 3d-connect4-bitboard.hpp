@@ -90,6 +90,32 @@ private:
         return masks;
     }();
 
+    static constexpr std::array<std::array<uint64_t, 13>, 64> win_masks2 = [] {
+        auto pos = [](short r, short c, short d) constexpr {
+            return 1ULL << (d * 16 + r * 4 + c);
+        };
+        std::array<std::array<uint64_t, 13>, 64> masks = {};
+        for (int r = 0; r < 4; r++) {
+            for (int c = 0; c < 4; c++) {
+                for (int d = 0; d < 4; d++) {
+                    int count = 0;
+                    for (int i = 0; i < 76; i++) {
+                        if ((win_masks[i] & pos(r,c,d)) !=0) {
+                            masks[d*16+r*4+c][count++] = win_masks[i];
+                        } 
+                    }
+                    while (count<13) {
+                        masks[d*16+r*4+c][count++] = 0ULL;
+                    }
+                }
+            }
+        }
+        return masks;
+    }();
+
+    
+
+    
 
 public:
     connect3dBoard() = default;
@@ -152,20 +178,38 @@ public:
     }
 
     player checkWin(const connect3dMove* m) override {
-        if (m == nullptr || m->p == player::A) {
+        if (false && m != nullptr) {
+            int cellIndex = __builtin_ctzll(m->move);
+            auto& mask = win_masks2[cellIndex];
+            if (m->p == player::A) {
+                for (int i = 0; i < 13; i++) {
+                    if (mask[i] == 0) break;
+                    if (mask[i]&boardA) {
+                        return player::A;
+                    }
+                }
+            } 
+            if (m->p == player::B) {
+                for (int i = 0; i < 13; i++) {
+                    if (mask[i] == 0) break;
+                    if (mask[i]&boardB) {
+                        return player::B;
+                    }
+                }
+            }
+        } else {
             for(int i = 0; i < 76; i++) {
                 if ((boardA&win_masks[i]) == win_masks[i]) {
                     return player::A;
                 }
             }
-        } 
-        if (m == nullptr || m->p == player::B) {
             for(int i = 0; i < 76; i++) {
                 if ((boardB&win_masks[i]) == win_masks[i]) {
                     return player::B;
                 }
-            }
+            }    
         }
+        
         
         return player::NONE;
     }
