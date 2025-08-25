@@ -10,11 +10,11 @@ int main() {
 
     stat_t stats;
 
-    int halfMovesToCheck = 8;
+    int halfMovesToCheck = 6;
 
     double score;
 
-    for (int i = 0; i < 64; i++) {
+    for (int i = 0; i < 1; i++) {
         std::cout << "Move " << i+1 << '\n';
         stats.nodesExplored = 0;
         score = minimax(board, (i % 2 == 0 ? player::A : player::B), 0, halfMovesToCheck, &bestMove, stats);
@@ -26,6 +26,11 @@ int main() {
         board.makeMove(bestMove);
         std::cout << "board rep: " << board.boardA << "  " << board.boardB << "\n"; 
         std::cout << board.toString();
+
+        if (board.checkWin(nullptr) != player::NONE) {
+            std::cout << "Player " << (char)board.checkWin(nullptr) << " won! ---------------\n";
+            break;
+        }
     }
 
 

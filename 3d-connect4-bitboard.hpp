@@ -3,20 +3,25 @@
 #include <sstream>
 #include <array> 
 #include <iostream>
+#include <bit>
 
 
 struct connect3dMove {
+    inline int bit_index(uint64_t m) const { return 63 - std::countl_zero(m); }
     uint64_t move = 0;
     player p = player::NONE;
     connect3dMove(short r, short c, short d, player p) {
-        move = 0x1000000000000000ULL >> (d * 16 + r * 4 + c);
+        move = 0x8000000000000000ULL >> (d * 16 + r * 4 + c);
         this->p = p;
     }
     connect3dMove(uint64_t move, player p) {
         this->move = move;
         this->p = p;
     }
-    short level() const {
+    inline short level() const {
+        //int idx = bit_index(move);
+        //return idx/16;
+        
         uint64_t m = move;
         uint64_t mask = 0xFFFFULL << (16*3);
         for (int i = 0; i < 4; i++) {
@@ -26,8 +31,12 @@ struct connect3dMove {
             mask >>= 16;
         }
         return -1;
+        
     }
-    short row() const {
+    inline short row() const {
+        //int idx = bit_index(move);
+        //return (idx%16)/4;
+        
         uint64_t m = move;
         uint64_t mask = 0xF000F000F000F000ULL;
         for (int i = 0; i < 4; i++) {
@@ -37,17 +46,22 @@ struct connect3dMove {
             mask >>= 4;
         }
         return -1;
+        
     }
-    short col() const {
+    inline short col() const {
+        //int idx = bit_index(move);
+        //return idx%4;
+        
         uint64_t m = move;
         uint64_t mask = 0x8888888888888888ULL;
         for (int i = 0; i < 4; i++) {
             if ((m&mask) != 0) {
                 return i;
             }
-            m >>= 1;
+            mask >>= 1;
         }
         return -1;
+        
     }
     connect3dMove() = default;
 };
@@ -61,7 +75,7 @@ public:
     uint64_t boardB = 0;
 
     static constexpr uint64_t pos(short r, short c, short d) {
-        return 0x1000000000000000ULL >> (d * 16 + r * 4 + c);
+        return 0x8000000000000000ULL >> (d * 16 + r * 4 + c);
     }
 
     // A static array to hold all 76 winning line masks.
@@ -69,7 +83,7 @@ public:
     static constexpr std::array<uint64_t, 76> win_masks = [] {
 
         auto pos = [](short r, short c, short d) constexpr {
-            return 0x1000000000000000ULL >> (d * 16 + r * 4 + c);
+            return 0x8000000000000000ULL >> (d * 16 + r * 4 + c);
         };
         
         std::array<uint64_t, 76> masks = {};
@@ -125,7 +139,7 @@ public:
 
     static constexpr std::array<std::array<uint64_t, 13>, 64> win_masks2 = [] {
         auto pos = [](short r, short c, short d) constexpr {
-            return 0x1000000000000000ULL >> (d * 16 + r * 4 + c);
+            return 0x8000000000000000ULL >> (d * 16 + r * 4 + c);
         };
         std::array<std::array<uint64_t, 13>, 64> masks = {};
         for (int r = 0; r < 4; r++) {
@@ -158,7 +172,8 @@ public:
         // find all possible moves
         std::vector<connect3dMove> moves = std::vector<connect3dMove>();
         moves.reserve(16);
-        /*
+        
+        
         
         // all used spaces
         uint64_t boards = boardA | boardB;
@@ -167,21 +182,27 @@ public:
         uint64_t empty = ~boards;
 
         // all spaces exactly 1 above a piece, plus the bottom 
-        // TODO: is this wrong????
-        uint64_t oneAbove = (boards << 16) | 0xFFFFULL;
+        uint64_t oneAbove = (boards >> 16) | 0xFFFF000000000000ULL;
 
-        // all spaces exactly 1 above a peice and empty
+        // take only empty spaces of above
         uint64_t movebits = oneAbove & empty;
         //std::cout << "movebits: " << movebits << '\n';
+        /*
+        while (movebits != 0) {
+            // This trick isolates the least significant set bit
+            uint64_t move_bit = movebits & -movebits;
 
-        // take all used spaces, raise them by 1, then remove that from the empty spaces
-        //uint64_t movebits = (~(boards>>16))&empty;
-        
+            // Add the move to the list
+            moves.push_back(connect3dMove(move_bit, play));
+
+            // Clear that bit from the mask to find the next one in the next iteration
+            movebits &= ~move_bit;
+        }*/
         for (uint8_t i = 0; i < 64; i++) {
             if((movebits>>i & 0b1) == 1) moves.push_back(connect3dMove(movebits & (0b1ULL<<i), play));
             
         }
-            */
+            /*
         uint64_t boards = boardA | boardB;
         for (int r = 0; r < 4; r++) {
             for (int c = 0; c < 4; c++) {
@@ -193,8 +214,8 @@ public:
                     }
                 }
             }
-        }
-        //std::cout << "len moves: " << moves.size() << '\n';
+        }*/
+
         return moves;
     }
 
@@ -211,13 +232,13 @@ public:
     }
 
     player checkWin(const connect3dMove* m) override {
-        if (false && m != nullptr) {
+        if (m != nullptr) {
             int cellIndex = m->level()*16+m->row()*4+m->col();
-            auto& mask = win_masks2[cellIndex];
+            const auto& mask = win_masks2[cellIndex];
             if (m->p == player::A) {
                 for (int i = 0; i < 13; i++) {
                     if (mask[i] == 0) break;
-                    if (mask[i]&boardA) {
+                    if ((mask[i]&boardA)==mask[i]) {
                         return player::A;
                     }
                 }
@@ -225,7 +246,7 @@ public:
             if (m->p == player::B) {
                 for (int i = 0; i < 13; i++) {
                     if (mask[i] == 0) break;
-                    if (mask[i]&boardB) {
+                    if ((mask[i]&boardB)==mask[i]) {
                         return player::B;
                     }
                 }

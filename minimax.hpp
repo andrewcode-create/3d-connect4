@@ -5,7 +5,7 @@
 #include <limits>
 #include <cstdint>
 
-#define ALPHABETAPRUNING true
+#define ALPHABETAPRUNING false
 
 
 enum player {
@@ -57,7 +57,7 @@ double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int max
     auto pwin = board.checkWin(lastMove);
 
     if (pwin != player::NONE) {
-        return (pwin == player::A ? 1 : -1);
+        return (pwin == player::A ? 1 : -1) * 1000 * (1-halfMoveNum*0.001);
     }
 
     if (halfMoveNum >= maxHalfMoveNum) {

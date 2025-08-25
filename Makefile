@@ -8,7 +8,7 @@
 # -Wextra enables extra warnings
 # -g adds debugging information
 CXX = clang++
-CXXFLAGS = -std=c++17 -O2 -g
+CXXFLAGS = -std=c++20 -O2 -g
 
 # The name of the final executable file
 TARGET = 3d-connect4.out
