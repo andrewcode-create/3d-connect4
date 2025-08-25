@@ -7,7 +7,7 @@
 
 
 struct connect3dMove {
-    inline int bit_index(uint64_t m) const { return 63 - std::countl_zero(m); }
+    inline int bit_index(uint64_t m) const { return 63 - __builtin_ctzll(m); }
     uint64_t move = 0;
     player p = player::NONE;
     connect3dMove(short r, short c, short d, player p) {
@@ -18,9 +18,12 @@ struct connect3dMove {
         this->move = move;
         this->p = p;
     }
+    inline bool isValid() const {
+        return move!=0 && p!=player::NONE;
+    }
     inline short level() const {
-        //int idx = bit_index(move);
-        //return idx/16;
+        int idx = bit_index(move);
+        return idx/16;
         
         uint64_t m = move;
         uint64_t mask = 0xFFFFULL << (16*3);
@@ -34,8 +37,8 @@ struct connect3dMove {
         
     }
     inline short row() const {
-        //int idx = bit_index(move);
-        //return (idx%16)/4;
+        int idx = bit_index(move);
+        return (idx%16)/4;
         
         uint64_t m = move;
         uint64_t mask = 0xF000F000F000F000ULL;
@@ -49,8 +52,8 @@ struct connect3dMove {
         
     }
     inline short col() const {
-        //int idx = bit_index(move);
-        //return idx%4;
+        int idx = bit_index(move);
+        return idx%4;
         
         uint64_t m = move;
         uint64_t mask = 0x8888888888888888ULL;
@@ -67,7 +70,7 @@ struct connect3dMove {
 };
 
 
-class connect3dBoard : public board_t<connect3dMove> {
+class connect3dBoard : public board_t<connect3dMove, 16> {
 public:
     // goes like this: r0c0d0 r0c1d0 r0c2d0 r0c3d0 r1c0d0 r1c1d0 ... r3c3d0 r0c0d1 r0c1d1 ... r3c3d3
     // bottom is d0, top is d3
@@ -167,11 +170,10 @@ public:
 public:
     connect3dBoard() = default;
 
-    std::vector<connect3dMove> findMoves(player play) override {
+    std::array<connect3dMove, 16> findMoves(player play) override {
 
-        // find all possible moves
-        std::vector<connect3dMove> moves = std::vector<connect3dMove>();
-        moves.reserve(16);
+        std::array<connect3dMove, 16> moves;
+        //moves.reserve(16);
         
         
         
@@ -188,16 +190,21 @@ public:
         uint64_t movebits = oneAbove & empty;
         //std::cout << "movebits: " << movebits << '\n';
         
+        int inx = 0;
         while (movebits != 0) {
             // This trick isolates the least significant set bit
             uint64_t move_bit = movebits & -movebits;
 
             // Add the move to the list
-            moves.push_back(connect3dMove(move_bit, play));
+            moves[inx++] = (connect3dMove(move_bit, play));
 
             // Clear that bit from the mask to find the next one in the next iteration
             movebits &= ~move_bit;
-        }/*
+        }
+        while (inx < 16) {
+            moves[inx++] = connect3dMove();
+        }
+        /*
         for (uint8_t i = 0; i < 64; i++) {
             if((movebits>>i & 0b1) == 1) moves.push_back(connect3dMove(movebits & (0b1ULL<<i), play));
             

@@ -16,12 +16,14 @@ enum player {
 // Abstract base class for a game board.
 // Any game using this minimax library must inherit from this class
 // and implement all pure virtual functions.
-template<typename MoveType>
+// the MoveType must implement the following:
+// virtual bool isValid() = 0;
+template<typename MoveType, int MaxBranch>
 struct board_t {
     virtual ~board_t() = default;
 
     // returns an an array of all possible moves for the player's turn, ordered such that the most promising moves are first. 
-    virtual std::vector<MoveType> findMoves(player play) = 0;
+    virtual std::array<MoveType, MaxBranch> findMoves(player play) = 0;
     // applies the move to the board
     virtual void makeMove(MoveType m) = 0;
     // undos the move
@@ -42,8 +44,8 @@ struct stat_t {
     uint64_t nodesExplored = 0;
 };
 
-template<typename MoveType>
-double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int maxHalfMoveNum, MoveType* bestMoveRet, stat_t& stats) {
+template<typename MoveType, int MaxBranch>
+double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveNum, int maxHalfMoveNum, MoveType* bestMoveRet, stat_t& stats) {
     return minimax<MoveType>(board, player, halfMoveNum, maxHalfMoveNum, bestMoveRet, stats, -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), (MoveType*)nullptr);
 }
 
@@ -51,8 +53,8 @@ double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int max
 // Runs the minimax algorithm on a given board
 // Returns the heuristic score of the best move.
 // if bestMoveRet is not nullptr, populates it with the best move found.
-template<typename MoveType>
-double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int maxHalfMoveNum, MoveType* bestMoveRet, stat_t& stats, double alpha, double beta, MoveType* lastMove) {
+template<typename MoveType, int MaxBranch>
+double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveNum, int maxHalfMoveNum, MoveType* bestMoveRet, stat_t& stats, double alpha, double beta, MoveType* lastMove) {
 
     auto pwin = board.checkWin(lastMove);
 
@@ -67,10 +69,10 @@ double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int max
 
 
 
-    std::vector<MoveType> moves = board.findMoves(player);
+    std::array<MoveType, MaxBranch> moves = board.findMoves(player);
 
     // check for draw by no moves left
-    if (moves.size() == 0) {
+    if (!moves[0].isValid()) {
         return 0;
     }
 
@@ -82,7 +84,7 @@ double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int max
         bestscore = -std::numeric_limits<double>::infinity();
 
         // go through moves
-        for(int i = 0; i < moves.size(); i++) {
+        for(int i = 0; i < moves.size() && moves[i].isValid(); i++) {
             stats.nodesExplored++;
             // check the move
             board.makeMove(moves[i]);
@@ -108,7 +110,7 @@ double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int max
         bestscore = std::numeric_limits<double>::infinity();
 
         // go through moves
-        for(int i = 0; i < moves.size(); i++) {
+        for(int i = 0; i < moves.size() && moves[i].isValid(); i++) {
             stats.nodesExplored++;
             // check the move
             board.makeMove(moves[i]);
