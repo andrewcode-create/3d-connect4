@@ -27,7 +27,7 @@ struct board_t {
     // undos the move
     virtual void undoMove(MoveType m) = 0;
     // checks whether a player won. Returns the player.
-    virtual player checkWin() = 0;
+    virtual player checkWin(const MoveType& m) = 0;
     // assigns a heuristic score to the board, where positive is player 1 and negative is player 2. 
     // Values should be scaled between -1 and 1.
     virtual double heuristic() = 0;
@@ -44,7 +44,7 @@ struct stat_t {
 
 template<typename MoveType>
 double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int maxHalfMoveNum, MoveType* bestMoveRet, stat_t& stats) {
-    return minimax<MoveType>(board, player, halfMoveNum, maxHalfMoveNum, bestMoveRet, stats, -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity());
+    return minimax<MoveType>(board, player, halfMoveNum, maxHalfMoveNum, bestMoveRet, stats, -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), (MoveType*)nullptr);
 }
 
 
@@ -52,9 +52,9 @@ double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int max
 // Returns the heuristic score of the best move.
 // if bestMoveRet is not nullptr, populates it with the best move found.
 template<typename MoveType>
-double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int maxHalfMoveNum, MoveType* bestMoveRet, stat_t& stats, double alpha, double beta) {
+double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int maxHalfMoveNum, MoveType* bestMoveRet, stat_t& stats, double alpha, double beta, MoveType* lastMove) {
 
-    auto pwin = board.checkWin();
+    auto pwin = board.checkWin(*lastMove);
 
 
 
@@ -88,7 +88,7 @@ double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int max
             stats.nodesExplored++;
             // check the move
             board.makeMove(moves[i]);
-            double newscore = minimax<MoveType>(board, player::B, halfMoveNum+1, maxHalfMoveNum, nullptr, stats, alpha, beta);
+            double newscore = minimax<MoveType>(board, player::B, halfMoveNum+1, maxHalfMoveNum, nullptr, stats, alpha, beta, &moves[i]);
             board.undoMove(moves[i]);
             // update score and move if needed
             if (bestscore < newscore) {
@@ -114,7 +114,7 @@ double minimax(board_t<MoveType>& board, player player, int halfMoveNum, int max
             stats.nodesExplored++;
             // check the move
             board.makeMove(moves[i]);
-            double newscore = minimax<MoveType>(board, player::A, halfMoveNum+1, maxHalfMoveNum, nullptr, stats, alpha, beta);
+            double newscore = minimax<MoveType>(board, player::A, halfMoveNum+1, maxHalfMoveNum, nullptr, stats, alpha, beta, &moves[i]);
             board.undoMove(moves[i]);
             // update score and move if needed
             if (bestscore > newscore) {

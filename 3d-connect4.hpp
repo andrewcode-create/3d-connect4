@@ -80,7 +80,7 @@ public:
             }
         }
     }
-    player checkWin() override {
+    player checkWin(const connect3dMove& m) override {
         // do the folowing for every depth level, starting with bottom.
         for (int d = 0; d < 4; d++) {
             // check rows for lines

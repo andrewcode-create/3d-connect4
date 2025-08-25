@@ -8,7 +8,7 @@
 # -Wextra enables extra warnings
 # -g adds debugging information
 CXX = clang++
-CXXFLAGS = -std=c++17 -g
+CXXFLAGS = -std=c++17 -O2 -g
 
 # The name of the final executable file
 TARGET = tictactoe_game.out

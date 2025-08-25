@@ -10,7 +10,7 @@ int main() {
 
     stat_t stats;
 
-    int halfMovesToCheck = 10;
+    int halfMovesToCheck = 8;
 
     double score;
 
