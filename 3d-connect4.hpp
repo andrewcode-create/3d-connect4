@@ -80,7 +80,109 @@ public:
             }
         }
     }
-    player checkWin(const connect3dMove& m) override {
+    player checkWin(const connect3dMove* m) override {
+
+
+        // do win check only for row, col, and depth of m if provided:
+        if (m != nullptr) {
+            int r = m->row;
+            int c = m->col;
+            int d;
+            for (d = 3; grid[r][c][d] == '-' && d >= 0; d--)
+            ;
+            {
+                // check row for line
+                char res = compare4(grid[r][0][d],grid[r][1][d],grid[r][2][d],grid[r][3][d]);
+                if (res == 'A') return player::A;
+                else if (res == 'B') return player::B; 
+            }
+            {
+                // check col for line
+                char res = compare4(grid[0][c][d],grid[1][c][d],grid[2][c][d],grid[3][c][d]);
+                if (res == 'A') return player::A;
+                else if (res == 'B') return player::B; 
+            }
+
+            // check diagonals for lines and stairs
+            if (r==c) {
+                {
+                    // line
+                    char res = compare4(grid[0][0][d],grid[1][1][d],grid[2][2][d],grid[3][3][d]);
+                    if (res == 'A') return player::A;
+                    else if (res == 'B') return player::B; 
+                }
+
+                if (c==d) {
+                    char res = compare4(grid[0][0][0],grid[1][1][1],grid[2][2][2],grid[3][3][3]);
+                    if (res == 'A') return player::A;
+                    else if (res == 'B') return player::B; 
+                }
+                if (c+d==3) {
+                    char res = compare4(grid[0][0][3],grid[1][1][2],grid[2][2][1],grid[3][3][0]);
+                    if (res == 'A') return player::A;
+                    else if (res == 'B') return player::B; 
+                }
+
+
+            } else if (r+c==3) {
+                {
+                    // line
+                    char res = compare4(grid[0][3][d],grid[1][2][d],grid[2][1][d],grid[3][0][d]);
+                    if (res == 'A') return player::A;
+                    else if (res == 'B') return player::B; 
+                }
+
+                if (r==d) {
+                    char res = compare4(grid[0][3][0],grid[1][2][1],grid[2][1][2],grid[3][0][3]);
+                    if (res == 'A') return player::A;
+                    else if (res == 'B') return player::B; 
+                }
+                if (c==d) {
+                    char res = compare4(grid[0][3][3],grid[1][2][2],grid[2][1][1],grid[3][0][0]);
+                    if (res == 'A') return player::A;
+                    else if (res == 'B') return player::B; 
+                }
+            }
+
+            // check row for stairs
+            if (c==d) {
+                char res = compare4(grid[r][0][0],grid[r][1][1],grid[r][2][2],grid[r][3][3]);
+                if (res == 'A') return player::A;
+                else if (res == 'B') return player::B; 
+            }
+            if (c+d==3) {
+                char res = compare4(grid[r][0][3],grid[r][1][2],grid[r][2][1],grid[r][3][0]);
+                if (res == 'A') return player::A;
+                else if (res == 'B') return player::B; 
+            }
+
+            // check col for stairs
+            if (r==d) {
+                char res = compare4(grid[0][c][0],grid[1][c][1],grid[2][c][2],grid[3][c][3]);
+                if (res == 'A') return player::A;
+                else if (res == 'B') return player::B; 
+            }
+            if (r+d==3) {
+                char res = compare4(grid[0][c][3],grid[1][c][2],grid[2][c][1],grid[3][c][0]);
+                if (res == 'A') return player::A;
+                else if (res == 'B') return player::B; 
+            }
+
+            // check stack
+            {
+                char res = compare4(grid[r][c][0],grid[r][c][1],grid[r][c][2],grid[r][c][3]);
+                if (res == 'A') return player::A;
+                else if (res == 'B') return player::B; 
+            }
+            return player::NONE;
+        }
+
+
+
+
+        // else, check every configuration:
+
+
         // do the folowing for every depth level, starting with bottom.
         for (int d = 0; d < 4; d++) {
             // check rows for lines
