@@ -24,7 +24,7 @@ struct connect3dMove {
     inline short level() const {
         int idx = bit_index(move);
         return idx/16;
-        
+        /*
         uint64_t m = move;
         uint64_t mask = 0xFFFFULL << (16*3);
         for (int i = 0; i < 4; i++) {
@@ -34,12 +34,13 @@ struct connect3dMove {
             mask >>= 16;
         }
         return -1;
+        */
         
     }
     inline short row() const {
         int idx = bit_index(move);
         return (idx%16)/4;
-        
+        /*
         uint64_t m = move;
         uint64_t mask = 0xF000F000F000F000ULL;
         for (int i = 0; i < 4; i++) {
@@ -49,12 +50,12 @@ struct connect3dMove {
             mask >>= 4;
         }
         return -1;
-        
+        */
     }
     inline short col() const {
         int idx = bit_index(move);
         return idx%4;
-        
+        /*
         uint64_t m = move;
         uint64_t mask = 0x8888888888888888ULL;
         for (int i = 0; i < 4; i++) {
@@ -64,7 +65,7 @@ struct connect3dMove {
             mask >>= 1;
         }
         return -1;
-        
+        */
     }
     connect3dMove() = default;
 };

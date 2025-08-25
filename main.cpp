@@ -2,7 +2,7 @@
 #include "3d-connect4-bitboard.hpp"
 #include <iostream>
 
-int main() {
+int main(int argc, char** argv) {
 
     connect3dBoard board;
 
@@ -10,7 +10,12 @@ int main() {
 
     stat_t stats;
 
-    int halfMovesToCheck = 12;
+    if (argc != 2) {
+        std::cout << "Usage: halfMovesToCheck\n";
+        return 1;
+    }
+
+    int halfMovesToCheck = std::stoi(argv[1]);
 
     double score;
 
