@@ -11,7 +11,7 @@ CXX = clang++
 CXXFLAGS = -std=c++17 -O2 -g
 
 # The name of the final executable file
-TARGET = tictactoe_game.out
+TARGET = 3d-connect4.out
 
 # Automatically find all .cpp files in the current directory
 # wildcard finds files matching the pattern

@@ -3,8 +3,8 @@
 #include <sstream>
 
 struct connect3dMove {
-    int row;
-    int col;
+    uint8_t row;
+    uint8_t col;
     char player;
     connect3dMove(int r, int c, char p) {
         row = r;
@@ -30,22 +30,7 @@ public:
     connect3dBoard() = default;
 
     std::vector<connect3dMove> findMoves(player play) override {
-        /*
-        // get current player by counting number of each player on board
-        char player;
-        int countA = 0;
-        int countB = 0;
-        for (auto& r : grid) {
-            for (auto& c : r) {
-                for (auto& d : c){
-                    if (d == 'A') countA++;
-                    if (d == 'B') countB++;
-                }
-            }
-        }
-        if (countA>countB) player = 'B';
-        else player = 'A';
-        */
+
         char p = 'A';
         if (play == player::B) p = 'B';
 
