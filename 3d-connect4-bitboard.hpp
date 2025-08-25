@@ -9,26 +9,59 @@ struct connect3dMove {
     uint64_t move = 0;
     player p = player::NONE;
     connect3dMove(short r, short c, short d, player p) {
-        move = 0b1 << (d*16+r*4+c);
+        move = 0x1000000000000000ULL >> (d * 16 + r * 4 + c);
         this->p = p;
     }
     connect3dMove(uint64_t move, player p) {
         this->move = move;
         this->p = p;
     }
+    short level() const {
+        uint64_t m = move;
+        uint64_t mask = 0xFFFFULL << (16*3);
+        for (int i = 0; i < 4; i++) {
+            if ((m&mask) != 0) {
+                return i;
+            }
+            mask >>= 16;
+        }
+        return -1;
+    }
+    short row() const {
+        uint64_t m = move;
+        uint64_t mask = 0xF000F000F000F000ULL;
+        for (int i = 0; i < 4; i++) {
+            if ((m&mask) != 0) {
+                return i;
+            }
+            mask >>= 4;
+        }
+        return -1;
+    }
+    short col() const {
+        uint64_t m = move;
+        uint64_t mask = 0x8888888888888888ULL;
+        for (int i = 0; i < 4; i++) {
+            if ((m&mask) != 0) {
+                return i;
+            }
+            m >>= 1;
+        }
+        return -1;
+    }
     connect3dMove() = default;
 };
 
 
 class connect3dBoard : public board_t<connect3dMove> {
-private:
+public:
     // goes like this: r0c0d0 r0c1d0 r0c2d0 r0c3d0 r1c0d0 r1c1d0 ... r3c3d0 r0c0d1 r0c1d1 ... r3c3d3
     // bottom is d0, top is d3
     uint64_t boardA = 0;
     uint64_t boardB = 0;
 
     static constexpr uint64_t pos(short r, short c, short d) {
-        return 1ULL << (d * 16 + r * 4 + c);
+        return 0x1000000000000000ULL >> (d * 16 + r * 4 + c);
     }
 
     // A static array to hold all 76 winning line masks.
@@ -36,7 +69,7 @@ private:
     static constexpr std::array<uint64_t, 76> win_masks = [] {
 
         auto pos = [](short r, short c, short d) constexpr {
-            return 1ULL << (d * 16 + r * 4 + c);
+            return 0x1000000000000000ULL >> (d * 16 + r * 4 + c);
         };
         
         std::array<uint64_t, 76> masks = {};
@@ -92,7 +125,7 @@ private:
 
     static constexpr std::array<std::array<uint64_t, 13>, 64> win_masks2 = [] {
         auto pos = [](short r, short c, short d) constexpr {
-            return 1ULL << (d * 16 + r * 4 + c);
+            return 0x1000000000000000ULL >> (d * 16 + r * 4 + c);
         };
         std::array<std::array<uint64_t, 13>, 64> masks = {};
         for (int r = 0; r < 4; r++) {
@@ -179,7 +212,7 @@ public:
 
     player checkWin(const connect3dMove* m) override {
         if (false && m != nullptr) {
-            int cellIndex = __builtin_ctzll(m->move);
+            int cellIndex = m->level()*16+m->row()*4+m->col();
             auto& mask = win_masks2[cellIndex];
             if (m->p == player::A) {
                 for (int i = 0; i < 13; i++) {

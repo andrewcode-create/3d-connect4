@@ -10,18 +10,21 @@ int main() {
 
     stat_t stats;
 
-    int halfMovesToCheck = 10;
+    int halfMovesToCheck = 8;
 
     double score;
 
-    for (int i = 0; i < 1; i++) {
+    for (int i = 0; i < 64; i++) {
         std::cout << "Move " << i+1 << '\n';
         stats.nodesExplored = 0;
         score = minimax(board, (i % 2 == 0 ? player::A : player::B), 0, halfMovesToCheck, &bestMove, stats);
         //std::cout << "BLAHHHHH!";
         std::cout << "AI chooses move to (" << bestMove.move << ") with score " << score << "\n";
+        std::cout << "This is row " << bestMove.row() << ", col " << bestMove.col() << ", level " << bestMove.level() << "\n";
         std::cout << "stats:" << stats.nodesExplored << "\n";
+        
         board.makeMove(bestMove);
+        std::cout << "board rep: " << board.boardA << "  " << board.boardB << "\n"; 
         std::cout << board.toString();
     }
 
