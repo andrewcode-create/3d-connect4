@@ -158,7 +158,8 @@ public:
                     return player::A;
                 }
             }
-        } else {
+        } 
+        if (m == nullptr || m->p == player::B) {
             for(int i = 0; i < 76; i++) {
                 if ((boardB&win_masks[i]) == win_masks[i]) {
                     return player::B;
