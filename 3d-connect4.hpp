@@ -51,6 +51,7 @@ public:
 
         // find all possible moves
         std::vector<connect3dMove> moves = std::vector<connect3dMove>();
+        moves.reserve(16);
         for (int r = 0; r < 4; r++) {
             for (int c = 0; c < 4; c++) {
                 if (grid[r][c][3] == '-') {
