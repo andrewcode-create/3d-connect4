@@ -5,7 +5,7 @@
 #include <limits>
 #include <cstdint>
 
-#define ALPHABETAPRUNING false
+#define ALPHABETAPRUNING true
 
 
 enum player {

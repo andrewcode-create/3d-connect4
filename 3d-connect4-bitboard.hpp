@@ -187,7 +187,7 @@ public:
         // take only empty spaces of above
         uint64_t movebits = oneAbove & empty;
         //std::cout << "movebits: " << movebits << '\n';
-        /*
+        
         while (movebits != 0) {
             // This trick isolates the least significant set bit
             uint64_t move_bit = movebits & -movebits;
@@ -197,11 +197,11 @@ public:
 
             // Clear that bit from the mask to find the next one in the next iteration
             movebits &= ~move_bit;
-        }*/
+        }/*
         for (uint8_t i = 0; i < 64; i++) {
             if((movebits>>i & 0b1) == 1) moves.push_back(connect3dMove(movebits & (0b1ULL<<i), play));
             
-        }
+        }*/
             /*
         uint64_t boards = boardA | boardB;
         for (int r = 0; r < 4; r++) {
