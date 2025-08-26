@@ -33,48 +33,15 @@ struct connect3dMove {
     inline short level() const {
         int idx = bit_index(move);
         return idx/16;
-        /*
-        uint64_t m = move;
-        uint64_t mask = 0xFFFFULL << (16*3);
-        for (int i = 0; i < 4; i++) {
-            if ((m&mask) != 0) {
-                return i;
-            }
-            mask >>= 16;
-        }
-        return -1;
-        */
         
     }
     inline short row() const {
         int idx = bit_index(move);
         return (idx%16)/4;
-        /*
-        uint64_t m = move;
-        uint64_t mask = 0xF000F000F000F000ULL;
-        for (int i = 0; i < 4; i++) {
-            if ((m&mask) != 0) {
-                return i;
-            }
-            mask >>= 4;
-        }
-        return -1;
-        */
     }
     inline short col() const {
         int idx = bit_index(move);
         return idx%4;
-        /*
-        uint64_t m = move;
-        uint64_t mask = 0x8888888888888888ULL;
-        for (int i = 0; i < 4; i++) {
-            if ((m&mask) != 0) {
-                return i;
-            }
-            mask >>= 1;
-        }
-        return -1;
-        */
     }
     connect3dMove() = default;
 };
@@ -348,61 +315,13 @@ public:
 
         const auto& table_to_use = (m.p == player::A) ? score_delta_A : score_delta_B;
 
+
         for (int i = 0; i < 13; i++) {
             if (mask[i] == 0) break;
 
             int a = std::popcount((mask[i]&boardA));
             int b = std::popcount((mask[i]&boardB));
             score += table_to_use[a][b];
-
-            /*
-            
-            double scoremod = 0;
-
-            if (m.p == player::A) {
-                if (a == 0) {
-                    // none in row, this will be first
-                    if (b == 0) {
-                        // no b in row, so add score for a
-                        scoremod += scorevals[0];
-                    } else {
-                        // b in row, so remove negative score from b and don't add score for a
-                        scoremod += scorevals[b-1];
-                    }
-                } else {
-                    // not first one in row
-                    if (b == 0) {
-                        // no b in row, so add difference in score for a
-                        scoremod += scorevals[a] - scorevals[a-1];
-                    } else {
-                        // b in row, so do nothing
-                    }
-                }
-            }
-
-            // switch all b for a and a for b, also change addition to subtraction to get negative scoremod
-            if (m.p == player::B) {
-                if (b == 0) {
-                    // none in row, this will be first
-                    if (a == 0) {
-                        // no b in row, so add score for a
-                        scoremod -= scorevals[0];
-                    } else {
-                        // b in row, so remove negative score from b and don't add score for a
-                        scoremod -= scorevals[a-1];
-                    }
-                } else {
-                    // not first one in row
-                    if (a == 0) {
-                        // no b in row, so add difference in score for a
-                        scoremod -= scorevals[b] - scorevals[b-1];
-                    } else {
-                        // b in row, so do nothing
-                    }
-                }
-            }
-            score += scoremod;
-            */
         }
             
 

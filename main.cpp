@@ -22,8 +22,9 @@ int main(int argc, char** argv) {
     for (int i = 0; i < 1; i++) {
         std::cout << "Move " << i+1 << '\n';
         stats.nodesExplored = 0;
-        std::cout << "checking depth " << (int)(halfMovesToCheck+(i/5)) << "\n";
-        score = minimax(board, (i % 2 == 0 ? player::A : player::B), 0, (int)(halfMovesToCheck+(i/5)), &bestMove, stats);
+        std::cout << "checking depth " << (int)(halfMovesToCheck) << "\n";
+        std::cout.flush();
+        score = minimax(board, (i % 2 == 0 ? player::A : player::B), 0, (int)(halfMovesToCheck), &bestMove, stats);
         //std::cout << "BLAHHHHH!";
         std::cout << "AI chooses move to (" << bestMove.move << ") with score " << score << "\n";
         std::cout << "This is row " << bestMove.row() << ", col " << bestMove.col() << ", level " << bestMove.level() << "\n";
