@@ -220,28 +220,11 @@ public:
         while (inx < 16) {
             moves[inx++] = connect3dMove();
         }
-        /*
-        for (uint8_t i = 0; i < 64; i++) {
-            if((movebits>>i & 0b1) == 1) moves.push_back(connect3dMove(movebits & (0b1ULL<<i), play));
-            
-        }*/
-            /*
-        uint64_t boards = boardA | boardB;
-        for (int r = 0; r < 4; r++) {
-            for (int c = 0; c < 4; c++) {
-                int d;
-                for (d = 0; d<4; d++) {
-                    if ((boards&pos(r,c,d))==0ULL) {
-                        moves.push_back(connect3dMove(pos(r,c,d), play));
-                        break;
-                    }
-                }
-            }
-        }*/
+        
 
 
 
-        // swaps best and second best move heuristic to front
+        // sort the moves from best to worst
         
         // finds index of best
         double best = -std::numeric_limits<double>::infinity();
@@ -407,29 +390,6 @@ public:
         return heuristicS / (512*8);
         #endif
         return 0;
-        /*
-        double score = 0;
-        //static constexpr double score_lookup[5] = {0.0, 1.0, 8.0, 64.0, 512.0};
-
-        // Evaluate the board based on how many potential winning lines each player has.
-        // A line with 3 of player A's pieces and one empty spot is more valuable
-        // than a line with only 2 of player A's pieces.
-        
-        for (const auto& mask : win_masks) {
-            int a_count = std::popcount(boardA & mask);
-            int b_count = std::popcount(boardB & mask);
-
-            // ignore cases where A and B are blocked or A and B both have nothing
-            if (a_count > 0 && b_count > 0 || a_count == 0 && b_count == 0) {
-                continue;
-            }
-
-            score += score_lookup[a_count] - score_lookup[b_count];
-
-        }
-            
-        return score/512;
-        */
     }
     std::string toString() override {
         std::stringstream ss;
