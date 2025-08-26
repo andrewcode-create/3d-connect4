@@ -6,11 +6,19 @@
 #include <bit>
 #include <cmath>
 
+#define heuristicState true
+
 
 struct connect3dMove {
     inline int bit_index(uint64_t m) const { return 63 - __builtin_ctzll(m); }
     uint64_t move = 0;
     player p = player::NONE;
+
+    #if heuristicState
+    bool isHeuristicSet = false;
+    double modHeuristic = 0;
+    #endif
+
     connect3dMove(short r, short c, short d, player p) {
         move = 0x8000000000000000ULL >> (d * 16 + r * 4 + c);
         this->p = p;
@@ -78,6 +86,12 @@ public:
     // bottom is d0, top is d3
     uint64_t boardA = 0;
     uint64_t boardB = 0;
+
+    #if heuristicState
+    double heuristicS = 0;
+    #endif
+
+
 
     static constexpr uint64_t pos(short r, short c, short d) {
         return 0x8000000000000000ULL >> (d * 16 + r * 4 + c);
@@ -236,7 +250,9 @@ public:
         int indexbest2 = 1;
         for (int i = 0; i < 16; i++) {
             if (!moves[i].isValid()) break;
-            double score = scoreMove(moves[i]);
+            moves[i].modHeuristic = scoreMove(moves[i]);
+            moves[i].isHeuristicSet = true;
+            double score = moves[i].modHeuristic;
             if (score > best) {
                 best = score;
                 indexbest = i;
@@ -258,6 +274,14 @@ public:
     }
 
     void makeMove(connect3dMove m) override {
+        #if heuristicState
+        if (!m.isHeuristicSet) {
+            m.modHeuristic = scoreMove(m);
+            m.isHeuristicSet = true;
+        }
+        heuristicS += m.modHeuristic;
+        #endif
+
         if (m.p == player::A) boardA |= m.move;
         else if (m.p == player::B) boardB |= m.move;
         else std::cerr<<"ERR MAKE MOVE";
@@ -267,6 +291,14 @@ public:
         if (m.p == player::A) boardA ^= m.move;
         else if (m.p == player::B) boardB ^= m.move;
         else std::cerr<<"ERR UNDO MOVE";
+
+        #if heuristicState
+        if (!m.isHeuristicSet) {
+            m.modHeuristic = scoreMove(m);
+            m.isHeuristicSet = true;
+        }
+        heuristicS -= m.modHeuristic;
+        #endif
     }
 
     player checkWin(const connect3dMove* m) override {
@@ -306,35 +338,74 @@ public:
         return player::NONE;
     }
 
+    // score a speculative move
     double scoreMove(const connect3dMove& m) const {
+        static double constexpr scorevals[] = {1,8,16,512};
+
         double score = 0;
         int cellIndex = m.level()*16+m.row()*4+m.col();
         const auto& mask = win_masks2[cellIndex];
 
-        if (m.p == player::A) {
-            for (int i = 0; i < 13; i++) {
-                if (mask[i] == 0) break;
-                int a = std::popcount((mask[i]&boardA));
-                int b = std::popcount((mask[i]&boardB));
-                if (b>0) continue;
-                // 1 for 1, 8 for 2, 64 for 3, 512 for win
-                score += std::pow(8,a);
+        for (int i = 0; i < 13; i++) {
+            if (mask[i] == 0) break;
+
+            int a = std::popcount((mask[i]&boardA));
+            int b = std::popcount((mask[i]&boardB));
+            
+            double scoremod = 0;
+
+            if (m.p == player::A) {
+                if (a == 0) {
+                    // none in row, this will be first
+                    if (b == 0) {
+                        // no b in row, so add score for a
+                        scoremod += scorevals[0];
+                    } else {
+                        // b in row, so remove negative score from b and don't add score for a
+                        scoremod += scorevals[b-1];
+                    }
+                } else {
+                    // not first one in row
+                    if (b == 0) {
+                        // no b in row, so add difference in score for a
+                        scoremod += scorevals[a] - scorevals[a-1];
+                    } else {
+                        // b in row, so do nothing
+                    }
+                }
             }
-        } 
-        if (m.p == player::B) {
-            for (int i = 0; i < 13; i++) {
-                if (mask[i] == 0) break;
-                int a = std::popcount((mask[i]&boardA));
-                int b = std::popcount((mask[i]&boardB));
-                if (a>0) continue;
-                // 1 for 1, 8 for 2, 64 for 3, 512 for win
-                score += std::pow(8,b);
+
+            // switch all b for a and a for b, also change addition to subtraction to get negative scoremod
+            if (m.p == player::B) {
+                if (b == 0) {
+                    // none in row, this will be first
+                    if (a == 0) {
+                        // no b in row, so add score for a
+                        scoremod -= scorevals[0];
+                    } else {
+                        // b in row, so remove negative score from b and don't add score for a
+                        scoremod -= scorevals[a-1];
+                    }
+                } else {
+                    // not first one in row
+                    if (a == 0) {
+                        // no b in row, so add difference in score for a
+                        scoremod -= scorevals[b] - scorevals[b-1];
+                    } else {
+                        // b in row, so do nothing
+                    }
+                }
             }
+            score += scoremod;
         }
+
         return score;
     }
 
     double heuristic() override {
+        #if heuristicState
+        return heuristicS / (512*8);
+        #endif
         return 0;
         /*
         double score = 0;
