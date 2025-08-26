@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
 
     double score;
 
-    for (int i = 0; i < 1; i++) {
+    for (int i = 0; i < 64 || false; i++) {
         std::cout << "Move " << i+1 << '\n';
         stats.nodesExplored = 0;
         std::cout << "checking depth " << (int)(halfMovesToCheck) << "\n";
@@ -38,6 +38,9 @@ int main(int argc, char** argv) {
             std::cout << "Player " << (char)board.checkWin(nullptr) << " won! ---------------\n";
             break;
         }
+        //char age = 0;
+        //std::cin >> age;
+        //std::cout << age;
     }
 
 

@@ -5,9 +5,34 @@
 #include <iostream>
 #include <bit>
 #include <cmath>
+#include <random>
+#include <unordered_map>
 
 #define heuristicState true
 
+// Helper class to manage Zobrist keys.
+class ZobristKeys {
+public:
+    std::array<std::array<uint64_t, 64>, 2> pieceKeys; // [player][square_index]
+    uint64_t turnKey;
+
+    static const ZobristKeys& getInstance() {
+        static ZobristKeys instance;
+        return instance;
+    }
+
+private:
+    ZobristKeys() {
+        std::mt19937_64 gen(0xDEADBEEFCAFEBABE); // Fixed seed for reproducibility
+        std::uniform_int_distribution<uint64_t> dist;
+        for (int i = 0; i < 2; ++i) {
+            for (int j = 0; j < 64; ++j) {
+                pieceKeys[i][j] = dist(gen);
+            }
+        }
+        turnKey = dist(gen);
+    }
+};
 
 struct connect3dMove {
     inline int bit_index(uint64_t m) const { return __builtin_clzll(m); }
@@ -57,6 +82,8 @@ public:
     #if heuristicState
     double heuristicS = 0;
     #endif
+
+    
 
 
 
@@ -123,11 +150,11 @@ public:
         return masks;
     }();
 
-    static constexpr std::array<std::array<uint64_t, 13>, 64> win_masks2 = [] {
+    static constexpr std::array<std::array<uint64_t, 7>, 64> win_masks2 = [] {
         auto pos = [](short r, short c, short d) constexpr {
             return 0x8000000000000000ULL >> (d * 16 + r * 4 + c);
         };
-        std::array<std::array<uint64_t, 13>, 64> masks = {};
+        std::array<std::array<uint64_t, 7>, 64> masks = {};
         for (int r = 0; r < 4; r++) {
             for (int c = 0; c < 4; c++) {
                 for (int d = 0; d < 4; d++) {
@@ -137,13 +164,25 @@ public:
                             masks[d*16+r*4+c][count++] = win_masks[i];
                         } 
                     }
-                    while (count<13) {
+                    while (count<7) {
                         masks[d*16+r*4+c][count++] = 0ULL;
                     }
                 }
             }
         }
         return masks;
+    }();
+
+    static constexpr std::array<uint8_t, 64> win_masks2_size = [] {
+        std::array<uint8_t, 64> ret = {};
+        for (int a = 0; a < 64; a++) {
+            int i = 0;
+            for (i = 0; i < 7; i++) {
+                if (win_masks2[a][i] == 0) break;
+            }
+            ret[a] = i;
+        }
+        return ret;
     }();
 
     static constexpr std::array<double, 4> score_vals = {2, 8, 64, 512*512};
@@ -174,7 +213,46 @@ public:
         }
         return delta;
     }();
-    
+
+    void insertionSortDescending(connect3dMove* moves, int count) {
+        if (count < 2) {
+            return; // Already sorted if 0 or 1 elements
+        }
+
+        for (int i = 1; i < count; ++i) {
+            connect3dMove key = moves[i];
+            int j = i - 1;
+
+            // Move elements of moves[0..i-1], that are less than key's heuristic,
+            // to one position ahead of their current position.
+            // This is modified for a descending sort.
+            while (j >= 0 && moves[j].modHeuristic < key.modHeuristic) {
+                moves[j + 1] = moves[j];
+                j = j - 1;
+            }
+            moves[j + 1] = key;
+        }
+    }
+    void inline insertionSortAscending(connect3dMove* moves, int count) {
+        if (count < 2) {
+            return; // Already sorted if 0 or 1 elements
+        }
+
+        for (int i = 1; i < count; ++i) {
+            connect3dMove key = moves[i];
+            int j = i - 1;
+
+            // Move elements of moves[0..i-1], that are less than key's heuristic,
+            // to one position ahead of their current position.
+            // This is modified for a ascending sort.
+            while (j >= 0 && moves[j].modHeuristic > key.modHeuristic) {
+                moves[j + 1] = moves[j];
+                j = j - 1;
+            }
+            moves[j + 1] = key;
+        }
+    }
+        
 
 public:
     connect3dBoard() = default;
@@ -182,10 +260,7 @@ public:
     std::array<connect3dMove, 16> findMoves(player play) override {
 
         std::array<connect3dMove, 16> moves;
-        //moves.reserve(16);
-        
-        
-        
+
         // all used spaces
         uint64_t boards = boardA | boardB;
 
@@ -220,11 +295,13 @@ public:
 
         if (play == player::A) {
             // Player A is the maximizer, sort descending (highest score first)
+            //insertionSortDescending(moves.data(), inx);
             std::sort(moves.begin(), moves.begin() + inx, [](const connect3dMove& a, const connect3dMove& b) {
                 return a.modHeuristic > b.modHeuristic;
             });
         } else { // player::B
             // Player B is the minimizer, sort ascending (lowest score first)
+            //insertionSortAscending(moves.data(), inx);
             std::sort(moves.begin(), moves.begin() + inx, [](const connect3dMove& a, const connect3dMove& b) {
                 return a.modHeuristic < b.modHeuristic;
             });
@@ -277,7 +354,7 @@ public:
             int cellIndex = m->level()*16+m->row()*4+m->col();
             const auto& mask = win_masks2[cellIndex];
             if (m->p == player::A) {
-                for (int i = 0; i < 13; i++) {
+                for (int i = 0; i < 7; i++) {
                     if (mask[i] == 0) break;
                     if ((mask[i]&boardA)==mask[i]) {
                         return player::A;
@@ -285,7 +362,7 @@ public:
                 }
             } 
             if (m->p == player::B) {
-                for (int i = 0; i < 13; i++) {
+                for (int i = 0; i < 7; i++) {
                     if (mask[i] == 0) break;
                     if ((mask[i]&boardB)==mask[i]) {
                         return player::B;
@@ -310,27 +387,28 @@ public:
     }
 
     // score a speculative move
-    double scoreMove(const connect3dMove& m) const {
-        static double constexpr scorevals[] = {1,8,16,512};
+    double inline scoreMove(const connect3dMove& m) const {
+        //static double constexpr scorevals[] = {1,8,16,512};
 
         double score = 0;
         int cellIndex = m.level()*16+m.row()*4+m.col();
         const auto& mask = win_masks2[cellIndex];
 
         const auto& table_to_use = (m.p == player::A) ? score_delta_A : score_delta_B;
+        //const auto& table_to_use = score_delta_A;
+
+        short s = win_masks2_size[cellIndex];
 
 
-        for (int i = 0; i < 13; i++) {
-            if (mask[i] == 0) break;
+        for (int i = 0; i < s; i++) {
+            //if (mask[i] == 0) break;
 
             int a = std::popcount((mask[i]&boardA));
             int b = std::popcount((mask[i]&boardB));
             score += table_to_use[a][b];
         }
             
-
         return score;
-        
     }
 
     double heuristic() override {
