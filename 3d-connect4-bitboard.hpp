@@ -146,7 +146,7 @@ public:
         return masks;
     }();
 
-    static constexpr std::array<double, 4> score_vals = {1, 8, 64, 512};
+    static constexpr std::array<double, 4> score_vals = {1, 8, 64, 512*512};
     
     static constexpr std::array<std::array<double, 4>, 4> score_delta_A = [] {
         std::array<std::array<double, 4>, 4> delta = {};
@@ -270,6 +270,10 @@ public:
 
     player checkWin(const connect3dMove* m) override {
         if (m != nullptr) {
+            // if the move would win, it's heuristic would be big enough
+            if (m->isHeuristicSet) {
+                return m->modHeuristic > 512*8 ? player::A : m->modHeuristic < -512*8 ? player::B : player::NONE;
+            }
             int cellIndex = m->level()*16+m->row()*4+m->col();
             const auto& mask = win_masks2[cellIndex];
             if (m->p == player::A) {
