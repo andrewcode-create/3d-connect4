@@ -10,7 +10,7 @@
 
 
 struct connect3dMove {
-    inline int bit_index(uint64_t m) const { return 63 - __builtin_ctzll(m); }
+    inline int bit_index(uint64_t m) const { return __builtin_clzll(m); }
     uint64_t move = 0;
     player p = player::NONE;
 
@@ -179,8 +179,34 @@ public:
         return masks;
     }();
 
+    static constexpr std::array<double, 4> score_vals = {1, 8, 16, 512};
     
+    static constexpr std::array<std::array<double, 4>, 4> score_delta_A = [] {
+        std::array<std::array<double, 4>, 4> delta = {};
+        for (int a = 0; a < 4; ++a) { // Own pieces
+            for (int b = 0; b < 4; ++b) { // Opponent pieces
+                if (b == 0) { // Opponent has no pieces on the line
+                    delta[a][b] = score_vals[a] - (a > 0 ? score_vals[a - 1] : 0);
+                } else if (a == 0) { // We have no pieces, but opponent does
+                    delta[a][b] = score_vals[b - 1];
+                } else { // Line is already contested
+                    delta[a][b] = 0;
+                }
+            }
+        }
+        return delta;
+    }();
 
+    // Pre-calculates the score delta for Player B. It's the inverse of Player A's table.
+    static constexpr std::array<std::array<double, 4>, 4> score_delta_B = [] {
+        std::array<std::array<double, 4>, 4> delta = {};
+        for (int a = 0; a < 4; ++a) { // Player A's pieces
+            for (int b = 0; b < 4; ++b) { // Player B's pieces
+                delta[a][b] = -score_delta_A[b][a];
+            }
+        }
+        return delta;
+    }();
     
 
 public:
@@ -212,46 +238,37 @@ public:
             uint64_t move_bit = movebits & -movebits;
 
             // Add the move to the list
-            moves[inx++] = (connect3dMove(move_bit, play));
+            moves[inx] = (connect3dMove(move_bit, play));
 
             // Clear that bit from the mask to find the next one in the next iteration
             movebits &= ~move_bit;
+
+            moves[inx].modHeuristic = scoreMove(moves[inx]);
+            moves[inx].isHeuristicSet = true;
+
+            inx++;
+
+        };
+
+
+        if (play == player::A) {
+            // Player A is the maximizer, sort descending (highest score first)
+            std::sort(moves.begin(), moves.begin() + inx, [](const connect3dMove& a, const connect3dMove& b) {
+                return a.modHeuristic > b.modHeuristic;
+            });
+        } else { // player::B
+            // Player B is the minimizer, sort ascending (lowest score first)
+            std::sort(moves.begin(), moves.begin() + inx, [](const connect3dMove& a, const connect3dMove& b) {
+                return a.modHeuristic < b.modHeuristic;
+            });
         }
+
+
         while (inx < 16) {
             moves[inx++] = connect3dMove();
         }
         
 
-
-
-        // sort the moves from best to worst
-        
-        // finds index of best
-        double best = -std::numeric_limits<double>::infinity();
-        double best2 = -std::numeric_limits<double>::infinity();
-        int indexbest = 0;
-        int indexbest2 = 1;
-        for (int i = 0; i < 16; i++) {
-            if (!moves[i].isValid()) break;
-            moves[i].modHeuristic = scoreMove(moves[i]);
-            moves[i].isHeuristicSet = true;
-            double score = moves[i].modHeuristic;
-            if (score > best) {
-                best = score;
-                indexbest = i;
-            }
-        }
-        
-        // swap
-        /*
-        auto tmp = moves[1];
-        moves[1] = moves[indexbest2];
-        moves[indexbest2] = tmp;
-        */
-        
-        auto tmp = moves[0];
-        moves[0] = moves[indexbest];
-        moves[indexbest] = tmp;
         return moves;
         
     }
@@ -329,11 +346,16 @@ public:
         int cellIndex = m.level()*16+m.row()*4+m.col();
         const auto& mask = win_masks2[cellIndex];
 
+        const auto& table_to_use = (m.p == player::A) ? score_delta_A : score_delta_B;
+
         for (int i = 0; i < 13; i++) {
             if (mask[i] == 0) break;
 
             int a = std::popcount((mask[i]&boardA));
             int b = std::popcount((mask[i]&boardB));
+            score += table_to_use[a][b];
+
+            /*
             
             double scoremod = 0;
 
@@ -380,9 +402,12 @@ public:
                 }
             }
             score += scoremod;
+            */
         }
+            
 
         return score;
+        
     }
 
     double heuristic() override {
