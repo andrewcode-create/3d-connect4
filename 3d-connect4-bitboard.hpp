@@ -4,6 +4,7 @@
 #include <array> 
 #include <iostream>
 #include <bit>
+#include <cmath>
 
 
 struct connect3dMove {
@@ -224,7 +225,36 @@ public:
             }
         }*/
 
+
+
+        // swaps best and second best move heuristic to front
+        
+        // finds index of best
+        double best = -std::numeric_limits<double>::infinity();
+        double best2 = -std::numeric_limits<double>::infinity();
+        int indexbest = 0;
+        int indexbest2 = 1;
+        for (int i = 0; i < 16; i++) {
+            if (!moves[i].isValid()) break;
+            double score = scoreMove(moves[i]);
+            if (score > best) {
+                best = score;
+                indexbest = i;
+            }
+        }
+        
+        // swap
+        /*
+        auto tmp = moves[1];
+        moves[1] = moves[indexbest2];
+        moves[indexbest2] = tmp;
+        */
+        
+        auto tmp = moves[0];
+        moves[0] = moves[indexbest];
+        moves[indexbest] = tmp;
         return moves;
+        
     }
 
     void makeMove(connect3dMove m) override {
@@ -276,9 +306,59 @@ public:
         return player::NONE;
     }
 
+    double scoreMove(const connect3dMove& m) const {
+        double score = 0;
+        int cellIndex = m.level()*16+m.row()*4+m.col();
+        const auto& mask = win_masks2[cellIndex];
+
+        if (m.p == player::A) {
+            for (int i = 0; i < 13; i++) {
+                if (mask[i] == 0) break;
+                int a = std::popcount((mask[i]&boardA));
+                int b = std::popcount((mask[i]&boardB));
+                if (b>0) continue;
+                // 1 for 1, 8 for 2, 64 for 3, 512 for win
+                score += std::pow(8,a);
+            }
+        } 
+        if (m.p == player::B) {
+            for (int i = 0; i < 13; i++) {
+                if (mask[i] == 0) break;
+                int a = std::popcount((mask[i]&boardA));
+                int b = std::popcount((mask[i]&boardB));
+                if (a>0) continue;
+                // 1 for 1, 8 for 2, 64 for 3, 512 for win
+                score += std::pow(8,b);
+            }
+        }
+        return score;
+    }
+
     double heuristic() override {
-        // no heuristic, so return 0 for draw
         return 0;
+        /*
+        double score = 0;
+        //static constexpr double score_lookup[5] = {0.0, 1.0, 8.0, 64.0, 512.0};
+
+        // Evaluate the board based on how many potential winning lines each player has.
+        // A line with 3 of player A's pieces and one empty spot is more valuable
+        // than a line with only 2 of player A's pieces.
+        
+        for (const auto& mask : win_masks) {
+            int a_count = std::popcount(boardA & mask);
+            int b_count = std::popcount(boardB & mask);
+
+            // ignore cases where A and B are blocked or A and B both have nothing
+            if (a_count > 0 && b_count > 0 || a_count == 0 && b_count == 0) {
+                continue;
+            }
+
+            score += score_lookup[a_count] - score_lookup[b_count];
+
+        }
+            
+        return score/512;
+        */
     }
     std::string toString() override {
         std::stringstream ss;
