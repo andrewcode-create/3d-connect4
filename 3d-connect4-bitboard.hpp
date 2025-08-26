@@ -146,7 +146,7 @@ public:
         return masks;
     }();
 
-    static constexpr std::array<double, 4> score_vals = {1, 8, 16, 512};
+    static constexpr std::array<double, 4> score_vals = {1, 8, 64, 512};
     
     static constexpr std::array<std::array<double, 4>, 4> score_delta_A = [] {
         std::array<std::array<double, 4>, 4> delta = {};
