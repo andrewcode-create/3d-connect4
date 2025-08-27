@@ -23,7 +23,7 @@ public:
 
 private:
     ZobristKeys() {
-        std::mt19937_64 gen(0xDEADBEEFCAFEBABE); // Fixed seed for reproducibility
+        std::mt19937_64 gen(0xDEADBEEFCAFEBABF); // Fixed seed for reproducibility
         std::uniform_int_distribution<uint64_t> dist;
         for (int i = 0; i < 2; ++i) {
             for (int j = 0; j < 64; ++j) {
@@ -83,7 +83,10 @@ public:
     double heuristicS = 0;
     #endif
 
-    
+    uint64_t z_hash = 0;
+    uint64_t getHash() const override {
+        return z_hash;
+    }
 
 
 
@@ -326,6 +329,13 @@ public:
         heuristicS += m.modHeuristic;
         #endif
 
+        int player_idx = (m.p == player::A) ? 0 : 1;
+        int cell_idx = m.level() * 16 + m.row() * 4 + m.col();
+        // Update Zobrist hash for the piece
+        z_hash ^= ZobristKeys::getInstance().pieceKeys[player_idx][cell_idx];
+        // It's good practice to also hash whose turn it is
+        z_hash ^= ZobristKeys::getInstance().turnKey;
+
         if (m.p == player::A) boardA |= m.move;
         else if (m.p == player::B) boardB |= m.move;
         else std::cerr<<"ERR MAKE MOVE";
@@ -343,6 +353,13 @@ public:
         }
         heuristicS -= m.modHeuristic;
         #endif
+
+        int player_idx = (m.p == player::A) ? 0 : 1;
+        int cell_idx = m.level() * 16 + m.row() * 4 + m.col();
+
+        // Update Zobrist hash (same operations as makeMove)
+        z_hash ^= ZobristKeys::getInstance().turnKey;
+        z_hash ^= ZobristKeys::getInstance().pieceKeys[player_idx][cell_idx];
     }
 
     player checkWin(const connect3dMove* m) override {

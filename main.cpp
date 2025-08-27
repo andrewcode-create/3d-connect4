@@ -17,18 +17,33 @@ int main(int argc, char** argv) {
 
     int halfMovesToCheck = std::stoi(argv[1]);
 
+
+    // Decide on a size in Megabytes.
+    const size_t tt_size_mb = 10; // Use 128 MB for the table
+    // Calculate how many entries can fit in that memory space.
+    const size_t tt_entry_count = (tt_size_mb * 1024 * 1024) / sizeof(TTEntry<connect3dMove>);
+
+    // Create the transposition table as a vector of that size.
+    // All entries are zero-initialized by default.
+    std::vector<TTEntry<connect3dMove>> tt(tt_entry_count);
+    
+    std::cout << "Transposition Table sized for " << tt_entry_count << " entries (" << tt_size_mb << " MB).\n";
+
     double score;
 
-    for (int i = 0; i < 64 || false; i++) {
+    for (int i = 0; i < 1 || false; i++) {
         std::cout << "Move " << i+1 << '\n';
         stats.nodesExplored = 0;
         std::cout << "checking depth " << (int)(halfMovesToCheck) << "\n";
         std::cout.flush();
-        score = minimax(board, (i % 2 == 0 ? player::A : player::B), 0, (int)(halfMovesToCheck), &bestMove, stats);
+        tt.assign(tt_entry_count, {}); 
+        score = minimax(board, (i % 2 == 0 ? player::A : player::B), 0, (int)(halfMovesToCheck), &bestMove, stats, tt);
         //std::cout << "BLAHHHHH!";
         std::cout << "AI chooses move to (" << bestMove.move << ") with score " << score << "\n";
         std::cout << "This is row " << bestMove.row() << ", col " << bestMove.col() << ", level " << bestMove.level() << "\n";
-        std::cout << "stats:" << stats.nodesExplored << "\n";
+        std::cout << "nodes:      " << stats.nodesExplored << "\n";
+        std::cout << "collisions: " << stats.hashCollisions << "\n";
+        std::cout << "percent collided: " << stats.hashCollisions/(double)stats.nodesExplored*100 << "\n";
         
         board.makeMove(bestMove);
         std::cout << "board rep: " << board.boardA << "  " << board.boardB << "\n"; 
