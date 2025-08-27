@@ -11,6 +11,8 @@
 // Enable the transposition table. 
 #define transpositionTableEnabled true
 
+// Enable basic performance statistics
+#define statisticsEnabled true
 
 enum player {
     A='A', B='B', NONE=0
@@ -19,15 +21,15 @@ enum player {
 // Flag for transposition table. Exact is the exact best move, LOWER_BOUND is beta, UPPER_BOUND is alpha.
 enum TTFlag { EXACT, LOWER_BOUND, UPPER_BOUND };
 
+// this is the type for transposition table entries
 template<typename MoveType>
 struct TTEntry {
     double score;
-    uint8_t depth;
-    uint8_t bestmove;
-    uint8_t padding1;
-    uint8_t padding2;
-    TTFlag flag;
-    uint64_t z_hash = 0;
+    uint8_t depth; // the depth searched to
+    uint8_t bestmove; // the best move found in this position
+    uint16_t extraSpace; // unused, here because of 64-bit alignment 
+    TTFlag flag; // type of score
+    uint64_t z_hash = 0; // the hash of the position
 
     TTEntry(double newscore, uint8_t newdepth, uint8_t newbestmove, TTFlag newflag, uint64_t newz_hash) {
         score = newscore;
@@ -38,7 +40,6 @@ struct TTEntry {
     }
 
     TTEntry() {}
-    //MoveType bestMove; // Optional: can be used for move ordering
 };
 
 
@@ -47,6 +48,7 @@ struct TTEntry {
 // and implement all pure virtual functions.
 // the MoveType must implement the following:
 // virtual bool isValid() = 0;
+// the MaxBranch is the maximum branching factor for the game
 template<typename MoveType, int MaxBranch>
 struct board_t {
     virtual ~board_t() = default;
@@ -57,31 +59,47 @@ struct board_t {
     virtual void makeMove(MoveType m) = 0;
     // undos the move
     virtual void undoMove(MoveType m) = 0;
-    // checks whether a player won. Returns the player.
+    // checks whether a player won. Returns the player or player::NONE
     virtual player checkWin(const MoveType* m) = 0;
-    // assigns a heuristic score to the board, where positive is player 1 and negative is player 2. 
+    // assigns a heuristic score to the board, where positive is player A and negative is player B. 
     // Values should be scaled between -1 and 1.
     virtual double heuristic() = 0;
 
+    
+    #if transpositionTableEnabled
+    // get a hash of the position for transposition table
     virtual uint64_t getHash() const = 0;
+    #endif
 
+    // for printing the board in human readable format
     virtual std::string toString() {
         return "NO GAME STR REPRESENTATION";
     }
 
 };
 
+// statistics type
 struct stat_t {
-    uint64_t nodesExplored = 0;
-    uint64_t hashCollisions = 0;
+    uint64_t nodesExplored = 0; // total leaf nodes
+    uint64_t hashCollisions = 0; // transposition table collisions
 };
 
+// overloaded function. This should be called from main.
+#if transpositionTableEnabled
 template<typename MoveType, int MaxBranch>
 double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveNum, int maxHalfMoveNum, 
     MoveType* bestMoveRet, stat_t& stats, std::vector<TTEntry<MoveType>> tt) {
 
     return minimax<MoveType>(board, player, halfMoveNum, maxHalfMoveNum, bestMoveRet, stats, -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), (MoveType*)nullptr, tt);
 }
+#else
+template<typename MoveType, int MaxBranch>
+double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveNum, int maxHalfMoveNum, 
+    MoveType* bestMoveRet, stat_t& stats) {
+
+    return minimax<MoveType>(board, player, halfMoveNum, maxHalfMoveNum, bestMoveRet, stats, -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), (MoveType*)nullptr);
+}
+#endif
 
 
 // Runs the minimax algorithm on a given board
@@ -89,30 +107,33 @@ double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveN
 // if bestMoveRet is not nullptr, populates it with the best move found.
 template<typename MoveType, int MaxBranch>
 double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveNum, int maxHalfMoveNum, 
-    MoveType* bestMoveRet, stat_t& stats, double alpha, double beta, MoveType* lastMove, 
-    std::vector<TTEntry<MoveType>>& tt) {
+    MoveType* bestMoveRet, stat_t& stats, double alpha, double beta, MoveType* lastMove
+    #if transpositionTableEnabled
+    , std::vector<TTEntry<MoveType>>& tt
+    #endif 
+    ) {
 
     
     
     #if transpositionTableEnabled
     // Transposition Table Lookup
-    uint64_t hash = board.getHash();
+    uint64_t hash = board.getHash(); // get a hash of the board
     size_t index = hash % tt.size(); // Calculate index into the vector
     const TTEntry<MoveType>& entry = tt[index];
-    //auto it = tt.find(hash);
     
 
+    // if the entry is valid or random collision
     if (entry.z_hash == hash) {
-        //const TTEntry<MoveType>& entry = it->second;
         // Check if the stored result is from a deep enough search
         if (entry.depth >= (maxHalfMoveNum - halfMoveNum)) {
             switch (entry.flag) {
                 case EXACT:
                     // If we have an exact score, we can return it.
-                    // We can't return bestMove as it's not stored in this version.
+                    // TODO: Also return bestmove
                     return entry.score;
                 case LOWER_BOUND:
                     // This is a fail-high node, the score is at least this high.
+                    // TODO: 
                     alpha = std::max(alpha, entry.score);
                     break;
                 case UPPER_BOUND:
@@ -129,19 +150,22 @@ double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveN
     // end transposition table lookup
     #endif
 
+    // check if someone won
     auto pwin = board.checkWin(lastMove);
 
+    // if someone won, return a score of 1000 minus 1 per move away it is
+    // this incentivizes earlier wins
     if (pwin != player::NONE) {
         return (pwin == player::A ? 1 : -1) * 1000 * (1-halfMoveNum*0.001);
     }
 
+    // depth limit check
     if (halfMoveNum >= maxHalfMoveNum) {
-        // depth limit
         return board.heuristic();
     }
 
 
-
+    // find the moves that can be made
     std::array<MoveType, MaxBranch> moves = board.findMoves(player);
 
     // check for draw by no moves left
@@ -149,8 +173,9 @@ double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveN
         return 0;
     }
 
-    // Keep a copy of the original alpha to determine the node type later
+    // Keep a copy of the original alpha and beta to determine the node type later
     double original_alpha = alpha;
+    double origional_beta = beta;
 
     MoveType bestmove = moves[0];
     double bestscore;
@@ -161,11 +186,14 @@ double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveN
 
         // go through moves
         for(int i = 0; i < moves.size() && moves[i].isValid(); i++) {
+            #if statisticsEnabled
             stats.nodesExplored++;
+            #endif
             // check the move
             board.makeMove(moves[i]);
             double newscore = minimax<MoveType>(board, player::B, halfMoveNum+1, maxHalfMoveNum, nullptr, stats, alpha, beta, &moves[i], tt);
             board.undoMove(moves[i]);
+
             // update score and move if needed
             if (bestscore < newscore) {
                 bestscore = newscore;
@@ -187,11 +215,15 @@ double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveN
 
         // go through moves
         for(int i = 0; i < moves.size() && moves[i].isValid(); i++) {
+            #if statisticsEnabled
             stats.nodesExplored++;
+            #endif
+
             // check the move
             board.makeMove(moves[i]);
             double newscore = minimax<MoveType>(board, player::A, halfMoveNum+1, maxHalfMoveNum, nullptr, stats, alpha, beta, &moves[i], tt);
             board.undoMove(moves[i]);
+
             // update score and move if needed
             if (bestscore > newscore) {
                 bestscore = newscore;
@@ -208,56 +240,57 @@ double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveN
         }
     }
 
+
     #if transpositionTableEnabled
 
-
-    // Use a depth-preferred replacement strategy. We only replace an entry
-    // if the new result is from a deeper search, which is more valuable
-    // or if 
-
+    // calculate current search depth
     int current_search_depth = maxHalfMoveNum - halfMoveNum;
 
+    // create an entry for the table
     TTEntry<MoveType> new_entry(bestscore, current_search_depth, halfMoveNum, EXACT, hash);
+
+    // set the flag and type for the new table
     if (bestscore <= original_alpha) {
+        // The result failed to beat the maximizer's guaranteed floor.
+        // This is a fail-low, so the score is an UPPER_BOUND.
+        // this only happens if this move is pruned
         new_entry.flag = UPPER_BOUND;
-    } else if (bestscore >= beta) {
+    } else if (bestscore >= origional_beta) {
+        // The result failed to stay under the minimizer's guaranteed ceiling.
+        // This is a fail-high, so the score is a LOWER_BOUND.
+        // this only happens if this moved is pruned
         new_entry.flag = LOWER_BOUND;
     } else {
+        // The score fell neatly within the original (alpha, beta) window.
+        // this is an exact score under win and heuristics
         new_entry.flag = EXACT;
     }
     
-
+    // if this is a hash collision
     if (tt[index].z_hash != 0 && tt[index].z_hash != hash) {
 
+        #if statisticsEnabled
         stats.hashCollisions++;
+        #endif
+        /* Store the result in one of two cases:
+         * 1. The search depth of the new result is higher or equal. 
+         *      There are relativley few of these, but they prune a lot, so 
+         *      we always want to store them.
+         * 2. This is the second half of the table. This splits the table into two parts:
+         *      the 'depth' part and the 'leaf' part. The leaf part is used much more
+         *      frequently but pruns little. The depth part prunes a lot but is used not often.
+        */
         if (entry.depth <= new_entry.depth || index > tt.size()/2) {
             tt[index] = new_entry; 
         }
-        // Overwrite the entry at the calculated index
     } else {
+        // not a hash collision, so write to the table
         tt[index] = new_entry; 
     }
     
-
-
-
-    // Transposition Table Store
-    /*
-    TTEntry<MoveType> new_entry;
-    new_entry.score = bestscore;
-    new_entry.depth = maxHalfMoveNum - halfMoveNum;
-    
-    if (bestscore <= original_alpha) {
-        new_entry.flag = UPPER_BOUND; // Fail-low, score is an upper bound.
-    } else if (bestscore >= beta) {
-        new_entry.flag = LOWER_BOUND; // Fail-high, score is a lower bound.
-    } else {
-        new_entry.flag = EXACT; // Score is exact.
-    }
-    tt[hash] = new_entry;*/
-    // End of TT Store 
     #endif
 
+    // out the best move if created, then return the score
     if (bestMoveRet != nullptr) *bestMoveRet = bestmove;
     return bestscore;
 
