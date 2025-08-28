@@ -35,7 +35,7 @@ private:
 };
 
 struct connect3dMove {
-    inline int bit_index(uint64_t m) const { return __builtin_clzll(m); }
+    inline uint8_t bit_index(uint64_t m) const { return __builtin_clzll(m); }
     uint64_t move = 0;
     player p = player::NONE;
 
@@ -43,6 +43,27 @@ struct connect3dMove {
     bool isHeuristicSet = false;
     double modHeuristic = 0;
     #endif
+
+    // compress to put in tt
+    inline uint8_t deflate() const {
+        uint8_t ind = bit_index(move);
+        // player is A if leftmost bit is 0
+        // player is B if leftmost bit is 1
+        ind |= (p-65) << 7;
+        return ind;
+    }
+
+    // inflate to add from tt
+    connect3dMove(uint8_t compressed) {
+        p = (player) (((compressed>>7) & (0b1)) + 65);
+
+        // The move index (0-63) is stored in the lower 7 bits.
+        uint8_t index = compressed & 0x7F; // 0x7F is a mask for the lower 7 bits
+        move = 0x8000000000000000ULL >> index;
+
+        isHeuristicSet = false;
+        modHeuristic = 0;
+    }
 
     connect3dMove(short r, short c, short d, player p) {
         move = 0x8000000000000000ULL >> (d * 16 + r * 4 + c);
@@ -83,9 +104,10 @@ public:
     double heuristicS = 0;
     #endif
 
-    uint64_t z_hash = 0;
+    std::array<uint64_t, 8> z_hashes = {};
     uint64_t getHash() const override {
-        return z_hash;
+        return *std::min_element(z_hashes.begin(), z_hashes.end());
+        //return z_hash[0]^z_hash[1]^z_hash[2]^z_hash[3]^z_hash[4]^z_hash[5]^z_hash[6]^z_hash[7];
     }
 
 
@@ -255,12 +277,41 @@ public:
             moves[j + 1] = key;
         }
     }
-        
+    struct Symmetries {
+        // maps[0] is identity, 1-3 are rotations, 4 is flip, 5-7 are flip+rotations
+        static constexpr std::array<std::array<int, 64>, 8> maps = [] {
+            std::array<std::array<int, 64>, 8> generatedMaps = {};
+            for (int d = 0; d < 4; ++d) {
+                for (int r = 0; r < 4; ++r) {
+                    for (int c = 0; c < 4; ++c) {
+                        int idx = d * 16 + r * 4 + c;
+                        // 0: Identity
+                        generatedMaps[0][idx] = idx;
+                        // 1: Rotate 90 degrees
+                        generatedMaps[1][idx] = d * 16 + c * 4 + (3 - r);
+                        // 2: Rotate 180 degrees
+                        generatedMaps[2][idx] = d * 16 + (3 - r) * 4 + (3 - c);
+                        // 3: Rotate 270 degrees
+                        generatedMaps[3][idx] = d * 16 + (3 - c) * 4 + r;
+                        // 4: Flip horizontally
+                        generatedMaps[4][idx] = d * 16 + r * 4 + (3 - c);
+                        // 5: Flip + Rotate 90
+                        generatedMaps[5][idx] = d * 16 + c * 4 + r;
+                        // 6: Flip + Rotate 180
+                        generatedMaps[6][idx] = d * 16 + (3 - r) * 4 + c;
+                        // 7: Flip + Rotate 270
+                        generatedMaps[7][idx] = d * 16 + (3 - c) * 4 + (3 - r);
+                    }
+                }
+            }
+            return generatedMaps;
+        }();
+    };
 
 public:
     connect3dBoard() = default;
 
-    std::array<connect3dMove, 16> findMoves(player play) override {
+    std::array<connect3dMove, 16> findMoves(player play, connect3dMove prevBest) override {
 
         std::array<connect3dMove, 16> moves;
 
@@ -295,18 +346,28 @@ public:
 
         };
 
+        bool usePrev = prevBest.isValid();
 
         if (play == player::A) {
             // Player A is the maximizer, sort descending (highest score first)
             //insertionSortDescending(moves.data(), inx);
-            std::sort(moves.begin(), moves.begin() + inx, [](const connect3dMove& a, const connect3dMove& b) {
-                return a.modHeuristic > b.modHeuristic;
+            std::sort(moves.begin(), moves.begin() + inx, [usePrev, prevBest](const connect3dMove& a, const connect3dMove& b) {
+                if (usePrev) {
+                    if (a.move == prevBest.move) return true;  // 'a' is the best move, it MUST come first.
+                    if (b.move == prevBest.move) return false; // 'b' is the best move, 'a' CANNOT come first.
+                }
+                return (a.modHeuristic > b.modHeuristic);
             });
         } else { // player::B
             // Player B is the minimizer, sort ascending (lowest score first)
             //insertionSortAscending(moves.data(), inx);
-            std::sort(moves.begin(), moves.begin() + inx, [](const connect3dMove& a, const connect3dMove& b) {
-                return a.modHeuristic < b.modHeuristic;
+            
+            std::sort(moves.begin(), moves.begin() + inx, [usePrev, prevBest](const connect3dMove& a, const connect3dMove& b) {
+                if (usePrev) {
+                    if (a.move == prevBest.move) return true;  // 'a' is the best move, it MUST come first.
+                    if (b.move == prevBest.move) return false; // 'b' is the best move, 'a' CANNOT come first.
+                }
+                return (a.modHeuristic < b.modHeuristic);
             });
         }
 
@@ -332,9 +393,20 @@ public:
         int player_idx = (m.p == player::A) ? 0 : 1;
         int cell_idx = m.level() * 16 + m.row() * 4 + m.col();
         // Update Zobrist hash for the piece
-        z_hash ^= ZobristKeys::getInstance().pieceKeys[player_idx][cell_idx];
+
+        const auto& keys = ZobristKeys::getInstance();
+        for (int i = 0; i < 8; i++) {
+            // Find where the piece at cell_idx lands in this symmetry
+            int mapped_idx = Symmetries::maps[i][cell_idx];
+            
+            // Update the corresponding hash for this symmetry
+            z_hashes[i] ^= keys.pieceKeys[player_idx][mapped_idx];
+            z_hashes[i] ^= keys.turnKey;
+        }
+
+        //z_hash ^= ZobristKeys::getInstance().pieceKeys[player_idx][cell_idx];
         // It's good practice to also hash whose turn it is
-        z_hash ^= ZobristKeys::getInstance().turnKey;
+        //z_hash ^= ZobristKeys::getInstance().turnKey;
 
         if (m.p == player::A) boardA |= m.move;
         else if (m.p == player::B) boardB |= m.move;
@@ -358,12 +430,23 @@ public:
         int cell_idx = m.level() * 16 + m.row() * 4 + m.col();
 
         // Update Zobrist hash (same operations as makeMove)
-        z_hash ^= ZobristKeys::getInstance().turnKey;
-        z_hash ^= ZobristKeys::getInstance().pieceKeys[player_idx][cell_idx];
+        const auto& keys = ZobristKeys::getInstance();
+        for (int i = 0; i < 8; ++i) {
+            int mapped_idx = Symmetries::maps[i][cell_idx];
+            z_hashes[i] ^= keys.turnKey;
+            z_hashes[i] ^= keys.pieceKeys[player_idx][mapped_idx];
+        }
+        //z_hash ^= ZobristKeys::getInstance().turnKey;
+        //z_hash ^= ZobristKeys::getInstance().pieceKeys[player_idx][cell_idx];
     }
 
-    player checkWin(const connect3dMove* m) override {
+    player checkWin(connect3dMove* m) override {
         if (m != nullptr) {
+
+            if (!(m->isHeuristicSet)) {
+                m->modHeuristic = scoreMove(*m);
+                m->isHeuristicSet = true;
+            }
             // if the move would win, it's heuristic would be big enough
             if (m->isHeuristicSet) {
                 return m->modHeuristic > 512*8 ? player::A : m->modHeuristic < -512*8 ? player::B : player::NONE;
