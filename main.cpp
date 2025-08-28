@@ -12,6 +12,14 @@ uint64_t countEntries(std::vector<TTEntry<connect3dMove>>& tt) {
     return ret;
 }
 
+uint64_t DecreaseDepth(std::vector<TTEntry<connect3dMove>>& tt) {
+    uint64_t ret = 0;
+    for (auto& t : tt) {
+        t.depth--;
+    }
+    return ret;
+}
+
 int main(int argc, char** argv) {
 
     connect3dBoard board;
@@ -47,6 +55,7 @@ int main(int argc, char** argv) {
         std::cout << "Move " << i+1 << '\n';
         std::cout << "checking depth " << (int)(halfMovesToCheck) << "\n";
         std::cout.flush();
+        
         //tt.assign(tt_entry_count, {}); 
         // attempt itterative deepening through transposition table, search for immidiate winning moves / good scores now
         score = minimax(board, (i % 2 == 0 ? player::A : player::B), 0, (int)(halfMovesToCheck-4), &bestMove, stats, tt, true);
@@ -58,6 +67,7 @@ int main(int argc, char** argv) {
         stats.hashCollisions = 0;
         // real
         score = minimax(board, (i % 2 == 0 ? player::A : player::B), 0, (int)(halfMovesToCheck), &bestMove, stats, tt, false);
+        //DecreaseDepth(tt);
         //std::cout << "BLAHHHHH!";
         std::cout << "AI chooses move to (" << bestMove.move << ") with score " << score << "\n";
         std::cout << "This is row " << bestMove.row() << ", col " << bestMove.col() << ", level " << bestMove.level() << "\n";

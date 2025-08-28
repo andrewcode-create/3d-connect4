@@ -264,7 +264,7 @@ double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveN
     int current_search_depth = maxHalfMoveNum - halfMoveNum;
 
     // create an entry for the table
-    TTEntry<MoveType> new_entry(bestscore, current_search_depth, bestmove.deflate(), EXACT, hash, 0);
+    TTEntry<MoveType> new_entry(bestscore, current_search_depth, bestmove.deflate(), EXACT, hash, halfMoveNum);
 
     // set the flag and type for the new table
     if (bestscore <= original_alpha) {
@@ -298,7 +298,7 @@ double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveN
          *      frequently but pruns little. The depth part prunes a lot but is used not often.
          *  THIS WAS EXPERIMENTALLY DETERMINED TO BE FASTER!!!
         */
-        if (entry.depth < new_entry.depth || (index < tt.size()/2 && !preload)) {
+        if (entry.depth <= new_entry.depth || (index < tt.size()/64 && !preload)) {
             tt[index] = new_entry; 
         }
     } else {
