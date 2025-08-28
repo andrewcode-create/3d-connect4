@@ -1,4 +1,5 @@
 #include "minimax.hpp" 
+#pragma once
 #include <vector>
 #include <sstream>
 #include <array> 
@@ -6,7 +7,6 @@
 #include <bit>
 #include <cmath>
 #include <random>
-#include <unordered_map>
 
 #define heuristicState true
 
@@ -23,7 +23,7 @@ public:
 
 private:
     ZobristKeys() {
-        std::mt19937_64 gen(0xDEADBEEFCAFEBABD); // Fixed seed for reproducibility
+        std::mt19937_64 gen(0xe935dbba4b138cef); // Fixed seed for reproducibility
         std::uniform_int_distribution<uint64_t> dist;
         for (int i = 0; i < 2; ++i) {
             for (int j = 0; j < 64; ++j) {

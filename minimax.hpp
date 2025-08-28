@@ -27,8 +27,8 @@ struct TTEntry {
     double score;
     uint8_t depth; // the depth searched to
     uint8_t bestmove; // the best move found in this position
-    uint8_t ply; // number of pieces on the board
-    uint8_t extraSpace; // unused, here because of 64-bit alignment 
+    //uint8_t ply; // number of pieces on the board
+    uint16_t extraSpace = 0;
     TTFlag flag; // type of score
     uint64_t z_hash = 0; // the hash of the position
 
@@ -38,7 +38,7 @@ struct TTEntry {
         bestmove = newbestmove;
         flag = newflag;
         z_hash = newz_hash;
-        ply = newply;
+        //ply = newply;
     }
 
     TTEntry() {}
@@ -123,9 +123,14 @@ double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveN
     // Transposition Table Lookup
     uint64_t hash = board.getHash(); // get a hash of the board
     size_t index = hash % tt.size(); // Calculate index into the vector
-    const TTEntry<MoveType>& entry = tt[index];
+    TTEntry<MoveType>& entry = tt[index];
 
     MoveType bestmove;
+
+    // if extra space is defined, use it!
+    if (entry.z_hash != hash && entry.extraSpace != 0) {
+        entry = tt[entry.extraSpace];
+    }
     
 
     // if the entry is valid or random collision
@@ -260,50 +265,51 @@ double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveN
 
     #if transpositionTableEnabled
 
-    // calculate current search depth
+    // Determine the type of entry based on the score relative to the alpha-beta bounds.
+    TTFlag flag_to_store = EXACT;
+    if (bestscore <= original_alpha) {
+        flag_to_store = UPPER_BOUND; // Fail-low, score is an upper bound.
+    } else if (bestscore >= origional_beta) {
+        flag_to_store = LOWER_BOUND; // Fail-high, score is a lower bound.
+    }
+
+    // Calculate the remaining search depth for this entry.
     int current_search_depth = maxHalfMoveNum - halfMoveNum;
 
-    // create an entry for the table
-    TTEntry<MoveType> new_entry(bestscore, current_search_depth, bestmove.deflate(), EXACT, hash, halfMoveNum);
+    // Create the new entry for the table.
+    TTEntry<MoveType> new_entry(bestscore, current_search_depth, bestmove.deflate(), flag_to_store, hash, halfMoveNum);
 
-    // set the flag and type for the new table
-    if (bestscore <= original_alpha) {
-        // The result failed to beat the maximizer's guaranteed floor.
-        // This is a fail-low, so the score is an UPPER_BOUND.
-        // this only happens if this move is pruned
-        new_entry.flag = UPPER_BOUND;
-    } else if (bestscore >= origional_beta) {
-        // The result failed to stay under the minimizer's guaranteed ceiling.
-        // This is a fail-high, so the score is a LOWER_BOUND.
-        // this only happens if this moved is pruned
-        new_entry.flag = LOWER_BOUND;
-    } else {
-        // The score fell neatly within the original (alpha, beta) window.
-        // this is an exact score under win and heuristics
-        new_entry.flag = EXACT;
+    // Calculate primary and secondary indices for the hash.
+    size_t primary_index = hash % tt.size();
+    size_t secondary_index = (((uint16_t)hash) ^ 0x9A6C) % tt.size();
+
+    TTEntry<MoveType>& primary_entry = tt[primary_index];
+    TTEntry<MoveType>& secondary_entry = tt[secondary_index];
+
+    // Scenario 1: The primary slot is empty or already stores an entry for the same position.
+    // In this case, we use the primary slot.
+    if (primary_entry.z_hash == 0 || primary_entry.z_hash == hash) {
+        primary_entry = new_entry;
     }
-    
-    // if this is a hash collision
-    if (tt[index].z_hash != 0 && tt[index].z_hash != hash) {
-
+    // Scenario 2: The secondary slot is empty or for the same position.
+    // We use the secondary slot.
+    else if (secondary_entry.z_hash == 0 || secondary_entry.z_hash == hash) {
+        secondary_entry = new_entry;
+    }
+    // Scenario 3: Both slots are occupied by entries for different positions (a double collision).
+    // We must decide which of the two existing entries is better to replace.
+    // The "Always Replace" scheme replaces the entry from the shallower search.
+    else {
         #if statisticsEnabled
         stats.hashCollisions++;
         #endif
-        /* Store the result in one of two cases:
-         * 1. The search depth of the new result is higher or equal. 
-         *      There are relativley few of these, but they prune a lot, so 
-         *      we always want to store them.
-         * 2. This is the second half of the table. This splits the table into two parts:
-         *      the 'depth' part and the 'leaf' part. The leaf part is used much more
-         *      frequently but pruns little. The depth part prunes a lot but is used not often.
-         *  THIS WAS EXPERIMENTALLY DETERMINED TO BE FASTER!!!
-        */
-        if (entry.depth <= new_entry.depth || (index < tt.size()/64 && !preload)) {
-            tt[index] = new_entry; 
+        if (primary_entry.depth <= secondary_entry.depth) {
+            // The primary entry is less valuable or equally valuable, so we replace it.
+            primary_entry = new_entry;
+        } else {
+            // The secondary entry is less valuable, so we replace it.
+            secondary_entry = new_entry;
         }
-    } else {
-        // not a hash collision, so write to the table
-        tt[index] = new_entry; 
     }
     
     #endif
