@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
 
 
     // Decide on a size in Megabytes.
-    const size_t tt_size_mb = 24; // Use 128 MB for the table
+    const size_t tt_size_mb = 10; // Use 128 MB for the table
     // Calculate how many entries can fit in that memory space.
     const size_t tt_entry_count = (tt_size_mb * 1024 * 1024) / sizeof(TTEntry<connect3dMove>);
 
@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
 
     double score;
 
-    for (int i = 0; i < 1 || false; i++) {
+    for (int i = 0; i < 1 || true; i++) {
         stats.nodesExplored = 0;
         stats.hashCollisions = 0;
         std::cout << "Move " << i+1 << '\n';
