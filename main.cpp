@@ -37,7 +37,7 @@ int main(int argc, char** argv) {
 
 
     // Decide on a size in Megabytes.
-    const size_t tt_size_mb = 10; // Use 128 MB for the table
+    const size_t tt_size_mb = 4096; // Use 128 MB for the table
     // Calculate how many entries can fit in that memory space.
     const size_t tt_entry_count = (tt_size_mb * 1024 * 1024) / sizeof(TTEntry<connect3dMove>);
 
@@ -49,7 +49,7 @@ int main(int argc, char** argv) {
 
     double score;
 
-    for (int i = 0; i < 1 || true; i++) {
+    for (int i = 0; i < 2 || false; i++) {
         stats.nodesExplored = 0;
         stats.hashCollisions = 0;
         std::cout << "Move " << i+1 << '\n';
@@ -59,6 +59,13 @@ int main(int argc, char** argv) {
         //tt.assign(tt_entry_count, {}); 
         // attempt itterative deepening through transposition table, search for immidiate winning moves / good scores now
         score = minimax(board, (i % 2 == 0 ? player::A : player::B), 0, (int)(halfMovesToCheck-4), &bestMove, stats, tt, true);
+        std::cout << "nodes:      " << stats.nodesExplored << "\n";
+        std::cout << "collisions: " << stats.hashCollisions << "\n";
+        std::cout << "percent collided: " << stats.hashCollisions/(double)stats.nodesExplored*100 << "\n";
+        std::cout << "percent filled:   " << countEntries(tt)/(double)tt_entry_count*100 << "\n";
+        stats.nodesExplored = 0;
+        stats.hashCollisions = 0;
+        score = minimax(board, (i % 2 == 0 ? player::A : player::B), 0, (int)(halfMovesToCheck-2), &bestMove, stats, tt, true);
         std::cout << "nodes:      " << stats.nodesExplored << "\n";
         std::cout << "collisions: " << stats.hashCollisions << "\n";
         std::cout << "percent collided: " << stats.hashCollisions/(double)stats.nodesExplored*100 << "\n";
