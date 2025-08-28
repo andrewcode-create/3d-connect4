@@ -1,4 +1,4 @@
 all:
-	clang++ -std=c++23 -O2 -g main.cpp -o connect4.out -march=native
+	g++ -std=c++23 -O3 -o connect4.out -march=native -flto main.cpp
 clean:
 	rm -f connect4.out

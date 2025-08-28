@@ -107,7 +107,7 @@ public:
     std::array<uint64_t, 8> z_hashes = {};
     uint64_t getHash() const override {
         return *std::min_element(z_hashes.begin(), z_hashes.end());
-        //return z_hashes[0]^z_hashes[1]^z_hashes[2]^z_hashes[3]^z_hashes[4]^z_hashes[5]^z_hashes[6]^z_hashes[7]^ZobristKeys::getInstance().turnKey;
+        //return z_hashes[0]+z_hashes[1]+z_hashes[2]+z_hashes[3]+z_hashes[4]+z_hashes[5]+z_hashes[6]+z_hashes[7];
     }
 
 
