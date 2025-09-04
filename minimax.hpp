@@ -121,50 +121,53 @@ double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveN
     
     #if transpositionTableEnabled
     // Transposition Table Lookup
-    uint64_t hash = board.getHash(); // get a hash of the board
-    size_t index = hash % tt.size(); // Calculate index into the vector
-    TTEntry<MoveType>& entry = tt[index];
+
+    uint64_t hash = board.getHash();
+    size_t primary_index = hash % tt.size();
+    size_t secondary_index = (hash ^ 0x4BC) % tt.size();
+
+    TTEntry<MoveType>* entry_ptr = nullptr;
+
+    // 1. Check the primary slot
+    if (tt[primary_index].z_hash == hash) {
+        entry_ptr = &tt[primary_index];
+    } 
+    // 2. If primary misses, check the secondary slot
+    else if (tt[secondary_index].z_hash == hash) {
+        entry_ptr = &tt[secondary_index];
+    }
 
     MoveType bestmove;
 
-    // if extra space is defined, use it!
-    if (entry.z_hash != hash && entry.extraSpace != 0) {
-        entry = tt[entry.extraSpace];
-    }
+    if (entry_ptr != nullptr) {
+    TTEntry<MoveType>& entry = *entry_ptr;
+    bestmove = MoveType(entry.bestmove);
     
-
-    // if the entry is valid or random collision
-    if (entry.z_hash == hash) {
-        bestmove = MoveType(entry.bestmove);
         // Check if the stored result is from a deep enough search
         if (entry.depth >= (maxHalfMoveNum - halfMoveNum)) {
             switch (entry.flag) {
                 case EXACT:
-                    // If we have an exact score, we can return it.
                     if (bestMoveRet != nullptr) {
                         *bestMoveRet = MoveType(entry.bestmove);
                     }
                     return entry.score;
                 case LOWER_BOUND:
-                    // This is a fail-high node, the score is at least this high.
-                    // TODO: 
                     alpha = std::max(alpha, entry.score);
-                    //bestmove = MoveType(entry.bestmove);
                     break;
                 case UPPER_BOUND:
-                    // This is a fail-low node, the score is at most this high.
                     beta = std::min(beta, entry.score);
-                    //bestmove = MoveType(entry.bestmove);
                     break;
             }
             if (alpha >= beta) {
                 return entry.score; // We can cause a cutoff.
             }
+        } else {
+            bestmove = MoveType();
         }
-    } else {
-        bestmove = MoveType();
     }
+    
 
+    
     // end transposition table lookup
     #endif
 
@@ -280,8 +283,8 @@ double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveN
     TTEntry<MoveType> new_entry(bestscore, current_search_depth, bestmove.deflate(), flag_to_store, hash, halfMoveNum);
 
     // Calculate primary and secondary indices for the hash.
-    size_t primary_index = hash % tt.size();
-    size_t secondary_index = (((uint16_t)hash) ^ 0x9A6C) % tt.size();
+    //primary_index = hash % tt.size();
+    //secondary_index = (hash ^ 0x4BC) % tt.size();
 
     TTEntry<MoveType>& primary_entry = tt[primary_index];
     TTEntry<MoveType>& secondary_entry = tt[secondary_index];

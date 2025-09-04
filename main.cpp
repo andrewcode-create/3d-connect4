@@ -37,7 +37,7 @@ int main(int argc, char** argv) {
 
 
     // Decide on a size in Megabytes.
-    const size_t tt_size_mb = 4096; // Use 128 MB for the table
+    const size_t tt_size_mb = 8; // Use 128 MB for the table
     // Calculate how many entries can fit in that memory space.
     const size_t tt_entry_count = (tt_size_mb * 1024 * 1024) / sizeof(TTEntry<connect3dMove>);
 
