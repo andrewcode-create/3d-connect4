@@ -106,8 +106,9 @@ public:
 
     std::array<uint64_t, 8> z_hashes = {};
     uint64_t getHash() const override {
-        return *std::min_element(z_hashes.begin(), z_hashes.end());
-        //return z_hashes[0]+z_hashes[1]+z_hashes[2]+z_hashes[3]+z_hashes[4]+z_hashes[5]+z_hashes[6]+z_hashes[7];
+        // return *std::min_element(z_hashes.begin(), z_hashes.end());
+        // Just return the identity hash to avoid symmetry bugs in TT
+        return z_hashes[0];
     }
 
 
@@ -395,6 +396,11 @@ public:
         // Update Zobrist hash for the piece
 
         const auto& keys = ZobristKeys::getInstance();
+        
+        z_hashes[0] ^= keys.pieceKeys[player_idx][cell_idx];
+        z_hashes[0] ^= keys.turnKey;
+
+        /*
         for (int i = 0; i < 8; i++) {
             // Find where the piece at cell_idx lands in this symmetry
             int mapped_idx = Symmetries::maps[i][cell_idx];
@@ -403,6 +409,7 @@ public:
             z_hashes[i] ^= keys.pieceKeys[player_idx][mapped_idx];
             z_hashes[i] ^= keys.turnKey;
         }
+        */
 
         //z_hash ^= ZobristKeys::getInstance().pieceKeys[player_idx][cell_idx];
         // It's good practice to also hash whose turn it is
@@ -431,11 +438,17 @@ public:
 
         // Update Zobrist hash (same operations as makeMove)
         const auto& keys = ZobristKeys::getInstance();
+        
+        z_hashes[0] ^= keys.turnKey;
+        z_hashes[0] ^= keys.pieceKeys[player_idx][cell_idx];
+
+        /*
         for (int i = 0; i < 8; ++i) {
             int mapped_idx = Symmetries::maps[i][cell_idx];
             z_hashes[i] ^= keys.turnKey;
             z_hashes[i] ^= keys.pieceKeys[player_idx][mapped_idx];
         }
+        */
         //z_hash ^= ZobristKeys::getInstance().turnKey;
         //z_hash ^= ZobristKeys::getInstance().pieceKeys[player_idx][cell_idx];
     }

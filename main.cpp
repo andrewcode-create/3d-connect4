@@ -49,7 +49,7 @@ int main(int argc, char** argv) {
 
     double score;
 
-    for (int i = 0; i < 2 || false; i++) {
+    for (int i = 0; i < 2 || true; i++) {
         stats.nodesExplored = 0;
         stats.hashCollisions = 0;
         std::cout << "Move " << i+1 << '\n';
