@@ -1,4 +1,5 @@
 #pragma once
+#include "ai.hpp"
 #include <string>
 #include <vector>
 #include <optional>
@@ -9,14 +10,10 @@
 #define ALPHABETAPRUNING true
 
 // Enable the transposition table. 
-#define transpositionTableEnabled true
+#define transpositionTableEnabled false
 
 // Enable basic performance statistics
-#define statisticsEnabled true
-
-enum player {
-    A='A', B='B', NONE=0
-};
+#define statisticsEnabled false
 
 // Flag for transposition table. Exact is the exact best move, LOWER_BOUND is beta, UPPER_BOUND is alpha.
 enum TTFlag { EXACT, LOWER_BOUND, UPPER_BOUND };
@@ -63,8 +60,8 @@ struct board_t {
     virtual void makeMove(MoveType m) = 0;
     // undos the move
     virtual void undoMove(MoveType m) = 0;
-    // checks whether a player won. Returns the player or player::NONE
-    virtual player checkWin(MoveType* m) = 0;
+    // checks whether a player won given last move was m. Returns the player or player::NONE
+    virtual player checkWin(MoveType* m) const = 0;
     // assigns a heuristic score to the board, where positive is player A and negative is player B. 
     // Values should be scaled between -1 and 1.
     virtual double heuristic() = 0;
@@ -101,7 +98,7 @@ template<typename MoveType, int MaxBranch>
 double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveNum, int maxHalfMoveNum, 
     MoveType* bestMoveRet, stat_t& stats) {
 
-    return minimax<MoveType>(board, player, halfMoveNum, maxHalfMoveNum, bestMoveRet, stats, -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), (MoveType*)nullptr);
+    return minimax<MoveType>(board, player, halfMoveNum, maxHalfMoveNum, bestMoveRet, stats, -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), (MoveType*)nullptr, false);
 }
 #endif
 
@@ -216,7 +213,11 @@ double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveN
             #endif
             // check the move
             board.makeMove(moves[i]);
-            double newscore = minimax<MoveType>(board, player::B, halfMoveNum+1, maxHalfMoveNum, nullptr, stats, alpha, beta, &moves[i], tt, preload);
+            double newscore = minimax<MoveType>(board, player::B, halfMoveNum+1, maxHalfMoveNum, nullptr, stats, alpha, beta, &moves[i]
+            #if transpositionTableEnabled
+            , tt
+            #endif
+            , preload);
             board.undoMove(moves[i]);
 
             // update score and move if needed
@@ -246,7 +247,11 @@ double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveN
 
             // check the move
             board.makeMove(moves[i]);
-            double newscore = minimax<MoveType>(board, player::A, halfMoveNum+1, maxHalfMoveNum, nullptr, stats, alpha, beta, &moves[i], tt, preload);
+            double newscore = minimax<MoveType>(board, player::A, halfMoveNum+1, maxHalfMoveNum, nullptr, stats, alpha, beta, &moves[i]
+            #if transpositionTableEnabled
+            , tt
+            #endif
+            , preload);
             board.undoMove(moves[i]);
 
             // update score and move if needed
@@ -322,4 +327,3 @@ double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveN
     return bestscore;
 
 }
-

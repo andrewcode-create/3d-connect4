@@ -79,7 +79,6 @@ struct connect3dMove {
     inline short level() const {
         int idx = bit_index(move);
         return idx/16;
-        
     }
     inline short row() const {
         int idx = bit_index(move);
@@ -455,7 +454,7 @@ public:
 
     player checkWin(connect3dMove* m) override {
         if (m != nullptr) {
-
+            /*
             if (!(m->isHeuristicSet)) {
                 m->modHeuristic = scoreMove(*m);
                 m->isHeuristicSet = true;
@@ -464,6 +463,7 @@ public:
             if (m->isHeuristicSet) {
                 return m->modHeuristic > 512*8 ? player::A : m->modHeuristic < -512*8 ? player::B : player::NONE;
             }
+                */
             int cellIndex = m->level()*16+m->row()*4+m->col();
             const auto& mask = win_masks2[cellIndex];
             if (m->p == player::A) {

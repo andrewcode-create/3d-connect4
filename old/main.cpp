@@ -1,6 +1,7 @@
 //#include "tictactoe.hpp"
 #include "3d-connect4-bitboard.hpp"
 #include <iostream>
+#include <string>
 
 uint64_t countEntries(std::vector<TTEntry<connect3dMove>>& tt) {
     uint64_t ret = 0;
@@ -20,6 +21,72 @@ uint64_t DecreaseDepth(std::vector<TTEntry<connect3dMove>>& tt) {
     return ret;
 }
 
+void runInteractive() {
+    connect3dBoard board;
+    stat_t stats;
+    
+    // Setup Transposition Table
+    const size_t tt_size_mb = 128; 
+    const size_t tt_entry_count = (tt_size_mb * 1024 * 1024) / sizeof(TTEntry<connect3dMove>);
+    std::vector<TTEntry<connect3dMove>> tt(tt_entry_count);
+
+    std::string command;
+    while (std::cin >> command) {
+        if (command == "new") {
+            board = connect3dBoard();
+            // Optional: Clear TT
+            // std::fill(tt.begin(), tt.end(), TTEntry<connect3dMove>());
+        } 
+        else if (command == "move") {
+            int r, c, p_int;
+            std::cin >> r >> c >> p_int;
+            // Calculate the correct depth (gravity)
+            int d = 0;
+            for (; d < 4; d++) {
+                if ((board.boardA | board.boardB) & connect3dBoard::pos(r, c, d)) continue;
+                else break;
+            }
+            
+            if (d < 4) {
+                player p = (p_int == 1) ? player::A : player::B;
+                connect3dMove mv(r, c, d, p);
+                board.makeMove(mv);
+                
+                std::string status = "ongoing";
+                player winner = board.checkWin(&mv);
+                if (winner == player::A) status = "win_A";
+                else if (winner == player::B) status = "win_B";
+                else if ((board.boardA | board.boardB) == 0xFFFFFFFFFFFFFFFFULL) status = "draw";
+
+                // Output the move actually made so python can sync
+                std::cout << "made_move " << r << " " << c << " " << d << " " << p_int << " " << status << std::endl;
+            } else {
+                std::cout << "error column_full" << std::endl;
+            }
+        } 
+        else if (command == "search") {
+            int depth, p_int;
+            std::cin >> depth >> p_int;
+            player p = (p_int == 1) ? player::A : player::B;
+            
+            connect3dMove bestMove;
+            stats = stat_t();
+            
+            // Run minimax
+            double score = minimax(board, p, 0, depth, &bestMove, stats, tt, false);
+            
+            std::cout << "bestmove " << bestMove.row() << " " << bestMove.col() << " " << bestMove.level() << " " << score << std::endl;
+        } 
+        else if (command == "print_raw") {
+            // Send raw bitboards to python for rendering
+            std::cout << "board_state " << board.boardA << " " << board.boardB << std::endl;
+        }
+        else if (command == "quit") {
+            break;
+        }
+    }
+}
+
 int main(int argc, char** argv) {
 
     connect3dBoard board;
@@ -27,6 +94,16 @@ int main(int argc, char** argv) {
     connect3dMove bestMove;// = connect3dMove(0,0,'Z');
 
     stat_t stats;
+
+    if (argc != 2) {
+        std::cout << "Usage: ./3d-connect4 <halfMovesToCheck> OR ./3d-connect4 interactive\n";
+        return 1;
+    }
+
+    if (std::string(argv[1]) == "interactive") {
+        runInteractive();
+        return 0;
+    }
 
     if (argc != 2) {
         std::cout << "Usage: halfMovesToCheck\n";
