@@ -11,8 +11,16 @@
 #include "3d-connect4-board.hpp"
 #include "random_ai.hpp"
 #include "human_play.hpp"
-#include "minimax_ai.hpp"
-#include "minimax_ai_v2.hpp"
+#include "minimax_ai_b1_v1.hpp"
+#include "minimax_ai_b1_v2.hpp"
+#include "minimax_ai_b2_v1.hpp"
+#include "minimax_ai_b2_v2.hpp"
+#include "minimax_ai_b3_v1.hpp"
+#include "minimax_ai_b3_v2.hpp"
+#include "minimax_ai_b4_v1.hpp"
+#include "minimax_ai_b5_v1.hpp"
+#include "minimax_ai_b5_v2.hpp"
+#include "heuristic_bot.hpp"
 
 struct PlayerOption {
     std::string name;
@@ -22,8 +30,16 @@ struct PlayerOption {
 const std::vector<PlayerOption> playerOptions = {
     {"Human", []() { return std::make_unique<HumanPlayer>(); }},
     {"Random AI", []() { return std::make_unique<RandomAI>(); }},
-    {"Minimax AI", []() { return std::make_unique<MinimaxAI>(); }},
-    {"Minimax AI v2", []() { return std::make_unique<MinimaxAI2>(); }}
+    {"Minimax AI b1 v1", []() { return std::make_unique<MinimaxAI_b1_v1>(); }},
+    {"Minimax AI b1 v2", []() { return std::make_unique<MinimaxAI_b1_v2>(); }},
+    {"Minimax AI b2 v1", []() { return std::make_unique<MinimaxAI_b2_v1>(); }},
+    {"Minimax AI b2 v2", []() { return std::make_unique<MinimaxAI_b2_v2>(); }},
+    {"Minimax AI b3 v1", []() { return std::make_unique<MinimaxAI_b3_v1>(); }},
+    {"Minimax AI b3 v2", []() { return std::make_unique<MinimaxAI_b3_v2>(); }},
+    {"Minimax AI b4 v1", []() { return std::make_unique<MinimaxAI_b4_v1>(); }},
+    {"Minimax AI b5 v1", []() { return std::make_unique<MinimaxAI_b5_v1>(); }},
+    {"Minimax AI b5 v2", []() { return std::make_unique<MinimaxAI_b5_v2>(); }},
+    {"Heuristic Bot", []() { return std::make_unique<HeuristicBot>(); }}
 };
 
 int getPlayerChoice(const std::string& playerName) {
@@ -70,24 +86,35 @@ int main() {
     if (numGames > 1) {
         int winsA = 0, winsB = 0, draws = 0;
         double totalTimeA = 0, totalTimeB = 0;
+        uint64_t totalNodesA = 0, totalNodesB = 0;
+        uint64_t totalCollisionsA = 0, totalCollisionsB = 0;
         std::cout << "Simulating " << numGames << " games..." << std::endl;
 
         struct SimResult {
             int winsA = 0; int winsB = 0; int draws = 0;
             double timeA = 0; double timeB = 0;
+            uint64_t nodesA = 0; uint64_t nodesB = 0;
+            uint64_t collisionsA = 0; uint64_t collisionsB = 0;
         };
 
-        auto runGames = [&](int count) -> SimResult {
+        auto runGames = [&](int count, bool swap) -> SimResult {
             SimResult res;
+            int p1Idx = swap ? playerBIdx : playerAIdx;
+            int p2Idx = swap ? playerAIdx : playerBIdx;
+
             for (int i = 0; i < count; ++i) {
                 connect3dBoard board;
-                auto playerA = playerOptions[playerAIdx].factory();
-                auto playerB = playerOptions[playerBIdx].factory();
+                auto playerA = playerOptions[p1Idx].factory();
+                auto playerB = playerOptions[p2Idx].factory();
 
                 while (true) {
                     player winner = board.checkWin();
                     if (winner != player::NONE) {
-                        if (winner == player::A) res.winsA++; else res.winsB++;
+                        if (winner == player::A) {
+                            if (!swap) res.winsA++; else res.winsB++;
+                        } else {
+                            if (!swap) res.winsB++; else res.winsA++;
+                        }
                         break;
                     }
                     if (board.findMoves().empty()) {
@@ -98,12 +125,31 @@ int main() {
                     AI_base* currentPlayer = (board.getPlayerTurn() == player::A) ? playerA.get() : playerB.get();
                     try {
                         auto start = std::chrono::high_resolution_clock::now();
-                        auto move = currentPlayer->getNextMove(board).move;
+                        auto ret = currentPlayer->getNextMove(board);
                         auto end = std::chrono::high_resolution_clock::now();
                         std::chrono::duration<double, std::milli> elapsed = end - start;
-                        if (board.getPlayerTurn() == player::A) res.timeA += elapsed.count();
-                        else res.timeB += elapsed.count();
-                        board.makeMove(move);
+                        if (board.getPlayerTurn() == player::A) {
+                            if (!swap) {
+                                res.timeA += elapsed.count();
+                                res.nodesA += ret.nodesExplored;
+                                res.collisionsA += ret.hashCollisions;
+                            } else {
+                                res.timeB += elapsed.count();
+                                res.nodesB += ret.nodesExplored;
+                                res.collisionsB += ret.hashCollisions;
+                            }
+                        } else {
+                            if (!swap) {
+                                res.timeB += elapsed.count();
+                                res.nodesB += ret.nodesExplored;
+                                res.collisionsB += ret.hashCollisions;
+                            } else {
+                                res.timeA += elapsed.count();
+                                res.nodesA += ret.nodesExplored;
+                                res.collisionsA += ret.hashCollisions;
+                            }
+                        }
+                        board.makeMove(ret.move);
                     } catch (...) {
                         // std::cerr << "Error: Invalid move in simulation." << std::endl;
                         break;
@@ -116,12 +162,32 @@ int main() {
         unsigned int nThreads = std::thread::hardware_concurrency();
         if (nThreads == 0) nThreads = 4;
         std::vector<std::future<SimResult>> futures;
-        int gamesPerThread = numGames / nThreads;
-        int remainder = numGames % nThreads;
 
-        for (unsigned int t = 0; t < nThreads; ++t) {
-            int count = gamesPerThread + (t < remainder ? 1 : 0);
-            if (count > 0) futures.push_back(std::async(std::launch::async, runGames, count));
+        if (!isHumanA && !isHumanB) {
+            int gamesSwap = numGames / 2;
+            int gamesNormal = numGames - gamesSwap;
+
+            int gpThread = gamesNormal / nThreads;
+            int rem = gamesNormal % nThreads;
+            for (unsigned int t = 0; t < nThreads; ++t) {
+                int count = gpThread + (t < rem ? 1 : 0);
+                if (count > 0) futures.push_back(std::async(std::launch::async, runGames, count, false));
+            }
+
+            gpThread = gamesSwap / nThreads;
+            rem = gamesSwap % nThreads;
+            for (unsigned int t = 0; t < nThreads; ++t) {
+                int count = gpThread + (t < rem ? 1 : 0);
+                if (count > 0) futures.push_back(std::async(std::launch::async, runGames, count, true));
+            }
+        } else {
+            int gamesPerThread = numGames / nThreads;
+            int remainder = numGames % nThreads;
+
+            for (unsigned int t = 0; t < nThreads; ++t) {
+                int count = gamesPerThread + (t < remainder ? 1 : 0);
+                if (count > 0) futures.push_back(std::async(std::launch::async, runGames, count, false));
+            }
         }
 
         for (auto& f : futures) {
@@ -131,6 +197,10 @@ int main() {
             draws += res.draws;
             totalTimeA += res.timeA;
             totalTimeB += res.timeB;
+            totalNodesA += res.nodesA;
+            totalNodesB += res.nodesB;
+            totalCollisionsA += res.collisionsA;
+            totalCollisionsB += res.collisionsB;
         }
 
         std::cout << "Results after " << numGames << " games:" << std::endl;
@@ -138,7 +208,11 @@ int main() {
         std::cout << "Player B Wins: " << winsB << " (" << (100.0 * winsB / numGames) << "%)" << std::endl;
         std::cout << "Draws:         " << draws << " (" << (100.0 * draws / numGames) << "%)" << std::endl;
         std::cout << "Total Time A:  " << totalTimeA << " ms" << std::endl;
+        std::cout << "Total Nodes A: " << totalNodesA << std::endl;
+        std::cout << "Total Collisions A: " << totalCollisionsA << std::endl;
         std::cout << "Total Time B:  " << totalTimeB << " ms" << std::endl;
+        std::cout << "Total Nodes B: " << totalNodesB << std::endl;
+        std::cout << "Total Collisions B: " << totalCollisionsB << std::endl;
         return 0;
     }
 
@@ -147,6 +221,10 @@ int main() {
     auto playerB = playerOptions[playerBIdx].factory();
     double totalTimeA = 0;
     double totalTimeB = 0;
+    uint64_t totalNodesA = 0;
+    uint64_t totalNodesB = 0;
+    uint64_t totalCollisionsA = 0;
+    uint64_t totalCollisionsB = 0;
     
     std::cout << "\nStarting Game...\n" << std::endl;
 
@@ -186,11 +264,19 @@ int main() {
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed = end - start;
 
-        if (currentTurn == player::A) totalTimeA += elapsed.count();
-        else totalTimeB += elapsed.count();
+        if (currentTurn == player::A) {
+            totalTimeA += elapsed.count();
+            totalNodesA += ret.nodesExplored;
+            totalCollisionsA += ret.hashCollisions;
+        } else {
+            totalTimeB += elapsed.count();
+            totalNodesB += ret.nodesExplored;
+            totalCollisionsB += ret.hashCollisions;
+        }
 
         std::cout << "Player " << (char)currentTurn << " plays move " << (int)ret.move.movenum 
-                  << " (" << elapsed.count() << " ms)" << std::endl;
+                  << " (" << elapsed.count() << " ms, " << ret.nodesExplored << " nodes, " 
+                  << ret.hashCollisions << " collisions, eval: " << ret.score << ")" << std::endl;
         
         try {
             board.makeMove(ret.move);
@@ -201,7 +287,11 @@ int main() {
     }
 
     std::cout << "Total Time A: " << totalTimeA << " ms" << std::endl;
+    std::cout << "Total Nodes A: " << totalNodesA << std::endl;
+    std::cout << "Total Collisions A: " << totalCollisionsA << std::endl;
     std::cout << "Total Time B: " << totalTimeB << " ms" << std::endl;
+    std::cout << "Total Nodes B: " << totalNodesB << std::endl;
+    std::cout << "Total Collisions B: " << totalCollisionsB << std::endl;
 
     return 0;
 }

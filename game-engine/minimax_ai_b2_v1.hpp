@@ -1,18 +1,21 @@
 #pragma once
 
 #include "ai.hpp"
-#include "minimaxBase.hpp"
+#include "minimaxBase2.hpp"
 #include "3d-connect4-board.hpp"
 #include <array>
 #include <algorithm>
 #include <random>
 #include <utility>
 
+namespace b2_v1 {
 // A fast variant of connect3dMove for AI use
 struct connect3dMoveFast {
     uint8_t movenum;
     connect3dMoveFast(int m) : movenum(m) {}
     connect3dMoveFast() : movenum(255) {}
+
+    double deltaHeuristic = 0;
 
     bool isValid() const { return movenum < 16; }
     uint8_t deflate() const { return movenum; }
@@ -27,7 +30,8 @@ struct connect3dMoveFast {
 };
 
 // A fast game board using bitboards for AI use
-struct connect3dBoardFast : public board_t<connect3dMoveFast, 16>{
+struct connect3dBoardFast : public mm2::board_t<connect3dMoveFast>{
+    using MoveType = connect3dMoveFast;
 
     /* 
      * top (4th) layer:
@@ -61,6 +65,48 @@ struct connect3dBoardFast : public board_t<connect3dMoveFast, 16>{
     player playerTurn = player::A;
 
     double currentScore = 0;
+
+    struct MoveFactory {
+        connect3dBoardFast* board = nullptr;
+        std::array<connect3dMoveFast, 16> moves;
+        int count = 0;
+        int idx = 0;
+        bool heuristicCalculated = false;
+
+        // gets next best move by heuristic
+        // returns an invalid move if no moves left
+        connect3dMoveFast getNextBestMove() {
+            if (idx >= count) return connect3dMoveFast();
+
+            // Move ordering: 
+            // calculate heuristics of each move
+            // then swap best to front
+            if (!heuristicCalculated && board) {
+                double initH = board->heuristic();
+                player p = board->playerTurn;
+                for (int i = 0; i < count; ++i) {
+                    board->makeMove(moves[i]);
+                    double diff = board->heuristic() - initH;
+                    if (p == player::A) moves[i].deltaHeuristic = diff;
+                    else moves[i].deltaHeuristic = -diff;
+                    board->undoMove(moves[i]);
+                }
+                heuristicCalculated = true;
+            }
+
+            // swap best move to front
+            int bestIdx = idx;
+            for (int i = idx + 1; i < count; ++i) {
+                if (moves[i].deltaHeuristic > moves[bestIdx].deltaHeuristic) {
+                    bestIdx = i;
+                }
+            }
+            if (bestIdx != idx) {
+                std::swap(moves[idx], moves[bestIdx]);
+            }
+            return moves[idx++];
+        }
+    };
 
     connect3dBoardFast() : boardA(0), boardB(0) {}
 
@@ -287,61 +333,50 @@ struct connect3dBoardFast : public board_t<connect3dMoveFast, 16>{
         return player::NONE;
     }
 
-    std::array<connect3dMoveFast, 16> findMoves(player play, connect3dMoveFast bestMove) override {
-        std::array<connect3dMoveFast, 16> moves;
-        int idx = 0;
-        bool usedBestMove = false;
+    MoveFactory createMoveFactory(player p) {
+        uint64_t boards = boardA | boardB;
+        MoveFactory factory;
+        factory.board = this;
 
-        // Try best move first if valid (optimization for alpha-beta pruning)
-        if (bestMove.isValid()) {
-            if (isMoveLegal(bestMove)) {
-                moves[idx++] = bestMove;
-                usedBestMove = true;
+        int numMoves = 0;
+
+        for (int i = 0; i < 16; i++) {
+            if (!((boards >> (i + 48)) & 1)) {
+                factory.moves[numMoves++] = connect3dMoveFast(i);
             }
         }
+        factory.count = numMoves;
 
-        // Add all moves
+        static thread_local std::mt19937 g(std::random_device{}());
+        std::shuffle(factory.moves.begin(), factory.moves.begin() + numMoves, g);
 
-        for (int i = 0; i < 16; ++i) {
-            connect3dMoveFast m(i);
-            if (isMoveLegal(m) && (!usedBestMove || m.movenum != bestMove.movenum)) {
-                moves[idx++] = m;
-            }
-        }
-
-        static std::random_device rd;
-        static std::mt19937 g(rd());
-        std::shuffle(moves.begin() + (usedBestMove ? 1 : 0), moves.begin() + idx, g);
-
-        return moves;
+        return factory;
     }
 
     double heuristic() override {
         return currentScore / 10000.0;
     }
 
-
-
 };
+}
 
 
-class MinimaxAI2 : public AI_base {
-    std::vector<TTEntry<connect3dMoveFast>> tt;
+class MinimaxAI_b2_v1 : public AI_base {
 public:
-    MinimaxAI2() {
-        tt.resize(1024 * 1024 * 4); // ~4 million entries
+    MinimaxAI_b2_v1() {
+        //tt.resize(1024 * 1024 * 4); // ~4 million entries
     }
 
     evalReturn getNextMove(connect3dBoard board) override {
-        connect3dBoardFast adapter(board);
-        stat_t stats;
-        connect3dMoveFast bestMove;
+        b2_v1::connect3dBoardFast adapter(board);
+        mm2::stat_t stats;
+        b2_v1::connect3dMoveFast bestMove;
         
         // Depth 4 provides a good balance of strength and speed for branching factor 16
-        int depth = 4; 
+        int depth = 6; 
 
-        double score = minimax(adapter, board.getPlayerTurn(), 0, depth, &bestMove, stats/*, tt*/);
+        double score = mm2::minimax(adapter, board.getPlayerTurn(), 0, depth, &bestMove, stats/*, tt*/);
         
-        return {score, bestMove};
+        return {score, bestMove, stats.nodesExplored};
     }
 };

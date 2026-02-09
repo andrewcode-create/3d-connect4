@@ -8,6 +8,8 @@
 #include <random>
 #include <utility>
 
+namespace b1_v1 {
+
 struct ZobristKeys {
     std::array<std::array<uint64_t, 64>, 2> pieces;
     uint64_t sideToMove;
@@ -31,7 +33,7 @@ private:
 };
 
 // Adapter class to make connect3dBoard compatible with minimax library
-class MinimaxAdapterBoard : public board_t<connect3dMove, 16> {
+class MinimaxAdapterBoard : public mm1::board_t<connect3dMove, 16> {
 private:
     connect3dBoard board;
     double currentScore = 0;
@@ -292,23 +294,25 @@ private:
     }
 };
 
-class MinimaxAI : public AI_base {
-    std::vector<TTEntry<connect3dMove>> tt;
+}
+
+class MinimaxAI_b1_v1 : public AI_base {
+    std::vector<mm1::TTEntry<connect3dMove>> tt;
 public:
-    MinimaxAI() {
+    MinimaxAI_b1_v1() {
         tt.resize(1024 * 1024 * 4); // ~4 million entries
     }
 
     evalReturn getNextMove(connect3dBoard board) override {
-        MinimaxAdapterBoard adapter(board);
-        stat_t stats;
+        b1_v1::MinimaxAdapterBoard adapter(board);
+        mm1::stat_t stats;
         connect3dMove bestMove;
         
         // Depth 4 provides a good balance of strength and speed for branching factor 16
         int depth = 4; 
 
-        double score = minimax(adapter, board.getPlayerTurn(), 0, depth, &bestMove, stats/*, tt*/);
+        double score = mm1::minimax(adapter, board.getPlayerTurn(), 0, depth, &bestMove, stats/*, tt*/);
         
-        return {score, bestMove};
+        return {score, bestMove, stats.nodesExplored, stats.hashCollisions};
     }
 };

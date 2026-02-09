@@ -13,11 +13,12 @@
 #define transpositionTableEnabled false
 
 // Enable basic performance statistics
-#define statisticsEnabled false
+#define statisticsEnabled true
 
 // Flag for transposition table. Exact is the exact best move, LOWER_BOUND is beta, UPPER_BOUND is alpha.
 enum TTFlag { EXACT, LOWER_BOUND, UPPER_BOUND };
 
+namespace mm1 {
 // this is the type for transposition table entries
 template<typename MoveType>
 struct TTEntry {
@@ -326,4 +327,5 @@ double minimax(board_t<MoveType, MaxBranch>& board, player player, int halfMoveN
     if (bestMoveRet != nullptr) *bestMoveRet = bestmove;
     return bestscore;
 
+}
 }
