@@ -65,6 +65,32 @@ function TournamentHeatmap({ result, ais }: { result: RunSummary; ais: AiInfo[] 
   </section>;
 }
 
+
+function MatchupMatrix({ result, ais }: { result: RunSummary; ais: AiInfo[] }) {
+  if (!result.matchups?.length) return null;
+  const name = (id: string) => ais.find((ai) => ai.id === id)?.name ?? id;
+  const entrants = result.standings.map((standing) => standing.aiId);
+  const matchups = new Map(result.matchups.map((matchup) => [`${matchup.playerB}::${matchup.playerA}`, matchup]));
+  const rate = (value: number, played: number) => `${formatMetric(value / Math.max(1, played) * 100, 1)}%`;
+  const cellStyle = (wins: number, losses: number, played: number) => {
+    const balance = (wins - losses) / Math.max(1, played);
+    const hue = balance > 0 ? 153 : balance < 0 ? 2 : 210;
+    return { backgroundColor: `hsla(${hue}, 72%, 45%, ${0.1 + Math.abs(balance) * 0.5})` };
+  };
+  return <section className="matchup-matrix" aria-labelledby="matchup-matrix-title">
+    <div className="heatmap-heading"><div><span className="eyebrow">Head-to-head by color</span><strong id="matchup-matrix-title">Color matchup matrix</strong></div><small>Each cell describes the orange row AI against the cyan column AI.</small></div>
+    <div className="matrix-key"><span className="role-a"><b>A</b> Columns · cyan · moves first</span><span className="role-b"><b>B</b> Rows · orange · moves second</span></div>
+    <div className="table-wrap"><table><thead><tr><th className="matrix-axis">Second player vs first player</th>{entrants.map((id) => <th key={id} scope="col"><span className="axis-token a">A</span>{name(id)}</th>)}</tr></thead>
+      <tbody>{entrants.map((playerB) => <tr key={playerB}><th scope="row"><span className="axis-token b">B</span>{name(playerB)}</th>{entrants.map((playerA) => {
+        const matchup = matchups.get(`${playerB}::${playerA}`);
+        if (!matchup) return <td className="matrix-empty" key={playerA}>—</td>;
+        return <td className="matrix-cell" key={playerA} style={cellStyle(matchup.secondWins, matchup.secondLosses, matchup.played)} title={`${matchup.played} games`} aria-label={`${name(playerB)} as B against ${name(playerA)} as A: ${rate(matchup.secondWins, matchup.played)} wins, ${rate(matchup.draws, matchup.played)} draws, ${rate(matchup.secondLosses, matchup.played)} losses`}>
+          <div className="matchup-rates"><span className="rate-win"><b>Win</b>{rate(matchup.secondWins, matchup.played)}</span><span className="rate-draw"><b>Draw</b>{rate(matchup.draws, matchup.played)}</span><span className="rate-loss"><b>Loss</b>{rate(matchup.secondLosses, matchup.played)}</span></div><small>{matchup.played} game{matchup.played === 1 ? "" : "s"}</small>
+        </td>;
+      })}</tr>)}</tbody></table></div>
+  </section>;
+}
+
 export function App() {
   const [mode, setMode] = useState<Mode>('play');
   const [ais, setAis] = useState<AiInfo[]>([]);
@@ -80,6 +106,7 @@ export function App() {
   const [runKind, setRunKind] = useState<'match' | 'batch'>('match');
   const [selectedAis, setSelectedAis] = useState<string[]>(['random', 'heuristic', 'b2-v1', 'b2-v2']);
   const [tournamentGames, setTournamentGames] = useState(4);
+  const [includeSelfPlay, setIncludeSelfPlay] = useState(true);
   const [repeats, setRepeats] = useState(3);
   const [samples, setSamples] = useState(5);
   const [seed, setSeed] = useState(1);
@@ -278,7 +305,8 @@ export function App() {
           <label><span>Run type</span><select value={runKind} onChange={(event) => setRunKind(event.target.value as 'match' | 'batch')}><option value="match">Live single game</option><option value="batch">Balanced batch</option></select></label>
           {runKind === 'batch' && <NumberField label="Games (even)" value={batchGames} min={2} step={2} onChange={setBatchGames} />}
           <RunOptions samples={samples} setSamples={setSamples} seed={seed} setSeed={setSeed} threads={threads} setThreads={setThreads} />
-          <button className="primary full" disabled={busy || playerA === playerB || (runKind === 'batch' && batchGames % 2 !== 0)} onClick={() => void launchRun({ kind: runKind, playerA, playerB, games: runKind === 'match' ? 1 : batchGames, samples, seed, threads })}>Run {runKind}</button>
+          {playerA === playerB && <p className="self-play-note">Self-play enabled: each color gets an independent AI instance.</p>}
+          <button className="primary full" disabled={busy || (runKind === 'batch' && batchGames % 2 !== 0)} onClick={() => void launchRun({ kind: runKind, playerA, playerB, games: runKind === 'match' ? 1 : batchGames, samples, seed, threads })}>Run {runKind}</button>
           <JobProgress job={activeJob} onCancel={() => void cancelRef.current?.()} />
           {runResult && <Results result={runResult} ais={ais} active={activeGame} setActive={(game) => { setActiveGame(game); setReplayPly(game.moves.length); }} />}
           <SearchCard title={`Ply ${replayPly}`} report={currentMove} />
@@ -288,7 +316,8 @@ export function App() {
           <div className="ai-checks">{ais.map((ai) => <label key={ai.id}><input type="checkbox" checked={selectedAis.includes(ai.id)} onChange={() => setSelectedAis((items) => items.includes(ai.id) ? items.filter((id) => id !== ai.id) : [...items, ai.id])} /><span>{ai.name}</span></label>)}</div>
           <div className="form-grid"><NumberField label="Games / pair (even)" value={tournamentGames} min={2} step={2} onChange={setTournamentGames} /><NumberField label="Repeats" value={repeats} onChange={setRepeats} /></div>
           <RunOptions samples={samples} setSamples={setSamples} seed={seed} setSeed={setSeed} threads={threads} setThreads={setThreads} />
-          <button className="primary full" disabled={busy || selectedAis.length < 2 || tournamentGames % 2 !== 0} onClick={() => void launchRun({ kind: 'tournament', aiIds: selectedAis, games: tournamentGames, repeats, samples, seed, threads })}>Start tournament · {selectedAis.length * (selectedAis.length - 1) / 2 * tournamentGames * repeats} games</button>
+          <label className="check-option"><input type="checkbox" checked={includeSelfPlay} onChange={(event) => setIncludeSelfPlay(event.target.checked)} /><span>Include self-play · fills matrix diagonal</span></label>
+          <button className="primary full" disabled={busy || selectedAis.length < (includeSelfPlay ? 1 : 2) || tournamentGames % 2 !== 0} onClick={() => void launchRun({ kind: 'tournament', aiIds: selectedAis, games: tournamentGames, repeats, samples, seed, threads, includeSelfPlay })}>Start tournament · {(selectedAis.length * (selectedAis.length - 1) / 2 + (includeSelfPlay ? selectedAis.length : 0)) * tournamentGames * repeats} games</button>
           <JobProgress job={activeJob} onCancel={() => void cancelRef.current?.()} />
           {runResult && <Results result={runResult} ais={ais} active={activeGame} heatmap setActive={(game) => { setActiveGame(game); setReplayPly(game.moves.length); }} />}
         </>}
@@ -328,7 +357,8 @@ function CandidateTable({ reports, turn }: { reports: SearchReport[]; turn: Play
 function Results({ result, ais, active, heatmap = false, setActive }: { result: RunSummary; ais: AiInfo[]; active: GameRecord | null; heatmap?: boolean; setActive: (game: GameRecord) => void }) {
   return <div className="results"><div className="result-title"><div><span className="eyebrow">Results</span><strong>{result.completedGames}/{result.totalGames} games</strong></div></div>
     <Standings result={result} ais={ais} />
-    {heatmap && <TournamentHeatmap result={result} ais={ais} />} 
+    {heatmap && <TournamentHeatmap result={result} ais={ais} />}
+    {heatmap && <MatchupMatrix result={result} ais={ais} />} 
     {result.sampledGames.length > 0 && <div className="samples"><span>Representative replays</span>{result.sampledGames.map((game) => <button key={`${game.pairing}-${game.id}`} className={active?.id === game.id && active.pairing === game.pairing ? 'active' : ''} onClick={() => setActive(game)}>
       {game.playerA} vs {game.playerB} · {game.draw ? 'draw' : `${game.winner} win`}</button>)}</div>}
   </div>;

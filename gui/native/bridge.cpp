@@ -433,6 +433,10 @@ struct StandingData {
     std::vector<double> repeatWinRates;
 };
 
+struct MatchupData {
+    int played = 0, secondWins = 0, draws = 0, secondLosses = 0;
+};
+
 void writeColorStanding(std::ostream& out, const ColorStandingData& color) {
     out << "{\"played\":" << color.played << ",\"wins\":" << color.wins
         << ",\"draws\":" << color.draws << ",\"losses\":" << color.losses
@@ -465,6 +469,7 @@ int runCommand(const std::map<std::string, std::string>& options) {
     const int sampleLimit = getInt(options, "samples", 5);
     const int requestedThreads = getInt(options, "threads", 2);
     const uint64_t baseSeed = uint64_t(getInt(options, "seed", 1));
+    const bool includeSelfPlay = getInt(options, "self-play", 0) != 0;
     if (gamesPerPair < 1 || repeats < 1 || sampleLimit < 0 || requestedThreads < 1) throw std::runtime_error("numeric run options must be positive");
     if (kind != "match" && gamesPerPair % 2 != 0) throw std::runtime_error("batch and tournament game counts must be even");
 
@@ -472,9 +477,9 @@ int runCommand(const std::map<std::string, std::string>& options) {
     std::vector<std::string> entrants;
     if (kind == "tournament") {
         entrants = splitStrings(getString(options, "ais"));
-        if (entrants.size() < 2) throw std::runtime_error("tournament needs at least two AIs");
+        if (entrants.empty() || (!includeSelfPlay && entrants.size() < 2)) throw std::runtime_error(includeSelfPlay ? "self-play tournament needs at least one AI" : "tournament needs at least two AIs");
         for (const auto& id : entrants) findAi(id);
-        for (int repeat = 0; repeat < repeats; ++repeat) for (size_t i = 0; i < entrants.size(); ++i) for (size_t j = i + 1; j < entrants.size(); ++j) {
+        for (int repeat = 0; repeat < repeats; ++repeat) for (size_t i = 0; i < entrants.size(); ++i) for (size_t j = includeSelfPlay ? i : i + 1; j < entrants.size(); ++j) {
             std::string pairing = entrants[i] + "__" + entrants[j] + "__r" + std::to_string(repeat);
             for (int game = 0; game < gamesPerPair; ++game) {
                 bool swap = game >= gamesPerPair / 2;
@@ -523,11 +528,14 @@ int runCommand(const std::map<std::string, std::string>& options) {
     results.resize(completed.load());
 
     std::map<std::string, StandingData> standings;
+    std::map<std::string, std::map<std::string, MatchupData>> matchups;
     std::map<std::string, std::map<std::string, int>> headToHead;
     std::map<int, std::map<std::string, std::pair<int, int>>> repeatWins;
     for (const auto& id : entrants) standings[id];
     for (const auto& game : results) {
         auto& sa = standings[game.playerA]; auto& sb = standings[game.playerB];
+        auto& matchup = matchups[game.playerB][game.playerA];
+        matchup.played++;
         sa.played++; sb.played++; sa.asA.played++; sb.asB.played++;
         sa.totals.ms += game.totalA.ms; sa.totals.nodes += game.totalA.nodes; sa.totals.collisions += game.totalA.collisions;
         sb.totals.ms += game.totalB.ms; sb.totals.nodes += game.totalB.nodes; sb.totals.collisions += game.totalB.collisions;
@@ -535,12 +543,15 @@ int runCommand(const std::map<std::string, std::string>& options) {
         sb.asB.totals.ms += game.totalB.ms; sb.asB.totals.nodes += game.totalB.nodes; sb.asB.totals.collisions += game.totalB.collisions;
         repeatWins[game.repeat][game.playerA].second++; repeatWins[game.repeat][game.playerB].second++;
         if (game.draw) {
+            matchup.draws++;
             sa.draws++; sb.draws++; sa.points++; sb.points++; sa.asA.draws++; sb.asB.draws++; sa.asA.points++; sb.asB.points++;
             headToHead[game.playerA][game.playerB]++; headToHead[game.playerB][game.playerA]++;
         } else if (game.winner == player::A) {
+            matchup.secondLosses++;
             sa.wins++; sb.losses++; sa.points += 3; sa.asA.wins++; sb.asB.losses++; sa.asA.points += 3;
             headToHead[game.playerA][game.playerB] += 3; repeatWins[game.repeat][game.playerA].first++;
         } else {
+            matchup.secondWins++;
             sb.wins++; sa.losses++; sb.points += 3; sb.asB.wins++; sa.asA.losses++; sb.asB.points += 3;
             headToHead[game.playerB][game.playerA] += 3; repeatWins[game.repeat][game.playerB].first++;
         }
@@ -588,6 +599,15 @@ int runCommand(const std::map<std::string, std::string>& options) {
             out << ",\"B\":";
             writeColorStanding(out, s.asB);
             out << "}}";
+        }
+        out << "],\"matchups\":[";
+        bool firstMatchup = true;
+        for (const auto& [playerB, opponents] : matchups) for (const auto& [playerA, matchup] : opponents) {
+            if (!firstMatchup) out << ',';
+            firstMatchup = false;
+            out << "{\"playerA\":" << quote(playerA) << ",\"playerB\":" << quote(playerB)
+                << ",\"played\":" << matchup.played << ",\"secondWins\":" << matchup.secondWins
+                << ",\"draws\":" << matchup.draws << ",\"secondLosses\":" << matchup.secondLosses << '}';
         }
         out << "],\"sampledGames\":[";
         for (size_t i = 0; i < samples.size(); ++i) { if (i) out << ','; writeGame(out, samples[i]); }

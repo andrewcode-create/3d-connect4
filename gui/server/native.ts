@@ -26,8 +26,9 @@ function nativeArguments(config: JobConfig) {
     '--repeats', String(positiveInteger(config.repeats, 1, 'repeats')), '--samples', String(Math.max(0, Number(config.samples ?? 5))),
     '--seed', String(positiveInteger(config.seed, 1, 'seed')), '--threads', String(positiveInteger(config.threads, 2, 'threads'))];
   if (config.kind === 'tournament') {
-    if (!config.aiIds || config.aiIds.length < 2) throw new Error('Tournament needs at least two AIs');
+    if (!config.aiIds || config.aiIds.length < (config.includeSelfPlay ? 1 : 2)) throw new Error(config.includeSelfPlay ? 'Self-play tournament needs at least one AI' : 'Tournament needs at least two AIs');
     args.push('--ais', config.aiIds.join(','));
+    if (config.includeSelfPlay) args.push('--self-play', '1');
   } else {
     if (!config.playerA || !config.playerB) throw new Error('playerA and playerB are required');
     args.push('--a', config.playerA, '--b', config.playerB);

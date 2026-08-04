@@ -76,11 +76,21 @@ export interface ColorStanding {
   hashCollisions: number;
 }
 
+export interface ColorMatchup {
+  playerA: string;
+  playerB: string;
+  played: number;
+  secondWins: number;
+  draws: number;
+  secondLosses: number;
+}
+
 export interface RunSummary {
   kind: JobKind;
   completedGames: number;
   totalGames: number;
   standings: Standing[];
+  matchups?: ColorMatchup[];
   sampledGames: GameRecord[];
 }
 
@@ -97,6 +107,7 @@ export interface JobConfig {
   seed?: number;
   threads?: number;
   candidates?: boolean;
+  includeSelfPlay?: boolean;
 }
 
 export interface JobSnapshot {

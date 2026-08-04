@@ -39,6 +39,24 @@ describe('local API', () => {
       expect(standing.byColor.B.played).toBe(1);
       expect(standing.byColor.A.played + standing.byColor.B.played).toBe(standing.played);
     }
+    expect(snapshot.result.matchups).toHaveLength(2);
+    expect(snapshot.result.matchups.map((matchup: { playerA: string; playerB: string }) => matchup.playerB + "::" + matchup.playerA).sort()).toEqual(["heuristic::random", "random::heuristic"]);
+    for (const matchup of snapshot.result.matchups) {
+      expect(matchup.played).toBe(1);
+      expect(matchup.secondWins + matchup.draws + matchup.secondLosses).toBe(matchup.played);
+    }
+
+    const selfPlay = await request(app).post('/api/jobs').send({ kind: 'tournament', aiIds: ['random'], games: 2, repeats: 1, threads: 1, includeSelfPlay: true }).expect(202);
+    let selfSnapshot = selfPlay.body;
+    for (let attempt = 0; attempt < 100 && !['complete', 'failed'].includes(selfSnapshot.status); ++attempt) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      selfSnapshot = (await request(app).get(`/api/jobs/${selfPlay.body.id}`).expect(200)).body;
+    }
+    expect(selfSnapshot.status).toBe('complete');
+    expect(selfSnapshot.result.completedGames).toBe(2);
+    expect(selfSnapshot.result.matchups[0]).toMatchObject({ playerA: 'random', playerB: 'random', played: 2 });
+    expect(selfSnapshot.result.sampledGames[0].playerA).toBe('random');
+    expect(selfSnapshot.result.sampledGames[0].playerB).toBe('random');
   });
 
   it('archives safely and ignores corrupted records', async () => {
