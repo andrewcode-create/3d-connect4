@@ -464,10 +464,11 @@ struct connect3dBoardFast : public mm3::board_t<connect3dMoveFast>{
 
 
 class MinimaxAI_b3_v2 : public AI_base {
+    int searchDepth;
 public:
     std::vector<mm3::TTEntry> tt;
 
-    MinimaxAI_b3_v2() {
+    explicit MinimaxAI_b3_v2(int depth = 7) : searchDepth(depth) {
         tt.resize(1024 * 1024 * 4 + sizeof(mm3::TTEntry)); // 4MB + 1 ttentry 
     }
 
@@ -477,7 +478,7 @@ public:
         b3_v2::connect3dMoveFast bestMove;
         
         // Depth 4 provides a good balance of strength and speed for branching factor 16
-        int depth = 7; 
+        int depth = searchDepth; 
 
         double score = mm3::minimax(adapter, board.getPlayerTurn(), 0, depth, &bestMove, stats, tt);
         

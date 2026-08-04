@@ -83,6 +83,19 @@ std::vector<std::string> splitStrings(const std::string& text) {
     return values;
 }
 
+std::map<std::string, int> splitDepthOverrides(const std::string& text) {
+    std::map<std::string, int> values;
+    for (const auto& item : splitStrings(text)) {
+        size_t separator = item.find('=');
+        if (separator == std::string::npos || separator == 0 || separator + 1 == item.size()) throw std::runtime_error("invalid depth override");
+        size_t used = 0;
+        int depth = std::stoi(item.substr(separator + 1), &used);
+        if (used != item.size() - separator - 1 || depth < 1 || depth > 12) throw std::runtime_error("depth must be between 1 and 12");
+        values[item.substr(0, separator)] = depth;
+    }
+    return values;
+}
+
 std::map<std::string, std::string> parseOptions(int argc, char** argv, int start) {
     std::map<std::string, std::string> result;
     for (int i = start; i < argc; ++i) {
@@ -127,22 +140,22 @@ struct AiDefinition {
     const char* name;
     const char* family;
     int depth;
-    std::function<std::unique_ptr<AI_base>(uint64_t)> factory;
+    std::function<std::unique_ptr<AI_base>(uint64_t, int)> factory;
 };
 
 const std::vector<AiDefinition>& aiDefinitions() {
     static const std::vector<AiDefinition> definitions = {
-        {"random", "Random AI", "random", 0, [](uint64_t s) { return std::make_unique<SeededRandomAI>(s); }},
-        {"heuristic", "Heuristic Bot", "heuristic", 1, [](uint64_t) { return std::make_unique<HeuristicBot>(); }},
-        {"b1-v1", "Minimax AI b1 v1", "minimax", 4, [](uint64_t) { return std::make_unique<MinimaxAI_b1_v1>(); }},
-        {"b1-v2", "Minimax AI b1 v2", "minimax", 7, [](uint64_t) { return std::make_unique<MinimaxAI_b1_v2>(); }},
-        {"b2-v1", "Minimax AI b2 v1", "minimax", 6, [](uint64_t) { return std::make_unique<MinimaxAI_b2_v1>(); }},
-        {"b2-v2", "Minimax AI b2 v2", "minimax", 6, [](uint64_t) { return std::make_unique<MinimaxAI_b2_v2>(); }},
-        {"b3-v1", "Minimax AI b3 v1", "minimax", 9, [](uint64_t) { return std::make_unique<MinimaxAI_b3_v1>(); }},
-        {"b3-v2", "Minimax AI b3 v2", "minimax", 7, [](uint64_t) { return std::make_unique<MinimaxAI_b3_v2>(); }},
-        {"b4-v1", "Minimax AI b4 v1", "minimax", 9, [](uint64_t) { return std::make_unique<MinimaxAI_b4_v1>(); }},
-        {"b5-v1", "Minimax AI b5 v1", "minimax", 9, [](uint64_t) { return std::make_unique<MinimaxAI_b5_v1>(); }},
-        {"b5-v2", "Minimax AI b5 v2", "minimax", 7, [](uint64_t) { return std::make_unique<MinimaxAI_b5_v2>(); }}
+        {"random", "Random AI", "random", 0, [](uint64_t s, int) { return std::make_unique<SeededRandomAI>(s); }},
+        {"heuristic", "Heuristic Bot", "heuristic", 1, [](uint64_t, int) { return std::make_unique<HeuristicBot>(); }},
+        {"b1-v1", "Minimax AI b1 v1", "minimax", 4, [](uint64_t, int d) { return std::make_unique<MinimaxAI_b1_v1>(d); }},
+        {"b1-v2", "Minimax AI b1 v2", "minimax", 7, [](uint64_t, int d) { return std::make_unique<MinimaxAI_b1_v2>(d); }},
+        {"b2-v1", "Minimax AI b2 v1", "minimax", 6, [](uint64_t, int d) { return std::make_unique<MinimaxAI_b2_v1>(d); }},
+        {"b2-v2", "Minimax AI b2 v2", "minimax", 6, [](uint64_t, int d) { return std::make_unique<MinimaxAI_b2_v2>(d); }},
+        {"b3-v1", "Minimax AI b3 v1", "minimax", 9, [](uint64_t, int d) { return std::make_unique<MinimaxAI_b3_v1>(d); }},
+        {"b3-v2", "Minimax AI b3 v2", "minimax", 7, [](uint64_t, int d) { return std::make_unique<MinimaxAI_b3_v2>(d); }},
+        {"b4-v1", "Minimax AI b4 v1", "minimax", 9, [](uint64_t, int d) { return std::make_unique<MinimaxAI_b4_v1>(d); }},
+        {"b5-v1", "Minimax AI b5 v1", "minimax", 9, [](uint64_t, int d) { return std::make_unique<MinimaxAI_b5_v1>(d); }},
+        {"b5-v2", "Minimax AI b5 v2", "minimax", 7, [](uint64_t, int d) { return std::make_unique<MinimaxAI_b5_v2>(d); }}
     };
     return definitions;
 }
@@ -154,7 +167,12 @@ const AiDefinition& findAi(const std::string& id) {
     return *it;
 }
 
-std::unique_ptr<AI_base> makeAi(const std::string& id, uint64_t seed) { return findAi(id).factory(seed); }
+std::unique_ptr<AI_base> makeAi(const std::string& id, uint64_t seed, int depthOverride = 0) {
+    const auto& definition = findAi(id);
+    if (depthOverride < 0 || depthOverride > 12) throw std::runtime_error("depth must be between 1 and 12");
+    if (depthOverride > 0 && std::string(definition.family) != "minimax") throw std::runtime_error("depth override is only supported for minimax AIs");
+    return definition.factory(seed, depthOverride > 0 ? depthOverride : definition.depth);
+}
 
 std::vector<std::array<int, 4>> winningLines() {
     std::vector<std::array<int, 4>> lines;
@@ -290,12 +308,13 @@ int analyzeCommand(const std::map<std::string, std::string>& options) {
     const std::string aiId = getString(options, "ai");
     const auto& definition = findAi(aiId);
     uint64_t seed = uint64_t(getInt(options, "seed", 1));
+    int depth = getInt(options, "depth", 0);
     bool candidates = getString(options, "candidates", "false") == "true";
-    auto ai = makeAi(aiId, seed);
+    auto ai = makeAi(aiId, seed, depth);
     SearchData best = search(*ai, position.board);
     std::vector<SearchData> reports;
     if (candidates) {
-        auto evaluator = makeAi(aiId, seed ^ 0x9e3779b97f4a7c15ULL);
+        auto evaluator = makeAi(aiId, seed ^ 0x9e3779b97f4a7c15ULL, depth);
         for (auto move : position.board.findMoves()) {
             connect3dBoard copy = position.board;
             copy.makeMove(move);
@@ -352,6 +371,8 @@ struct GameData {
     std::string pairing;
     std::string playerA;
     std::string playerB;
+    int playerADepth = 0;
+    int playerBDepth = 0;
     player winner = player::NONE;
     bool draw = false;
     std::vector<MoveData> moves;
@@ -375,7 +396,8 @@ void writeTotals(std::ostream& out, const Totals& totals) {
 void writeGame(std::ostream& out, const GameData& game) {
     out << "{\"id\":" << quote(game.id) << ",\"repeat\":" << game.repeat
         << ",\"pairing\":" << quote(game.pairing) << ",\"playerA\":" << quote(game.playerA)
-        << ",\"playerB\":" << quote(game.playerB) << ",\"winner\":";
+        << ",\"playerB\":" << quote(game.playerB)
+        << ",\"playerADepth\":" << game.playerADepth << ",\"playerBDepth\":" << game.playerBDepth << ",\"winner\":";
     if (game.winner == player::NONE) out << "null"; else out << quote(std::string(1, char(game.winner)));
     out << ",\"draw\":" << (game.draw ? "true" : "false") << ",\"moves\":[";
     for (size_t i = 0; i < game.moves.size(); ++i) { if (i) out << ','; writeMove(out, game.moves[i]); }
@@ -383,16 +405,18 @@ void writeGame(std::ostream& out, const GameData& game) {
 }
 
 GameData playGame(const std::string& id, const std::string& pairing, int repeat,
-                  const std::string& playerA, const std::string& playerB, uint64_t seed, bool live) {
+                  const std::string& playerA, const std::string& playerB, int depthA, int depthB, uint64_t seed, bool live) {
     GameData game;
     game.id = id;
     game.repeat = repeat;
     game.pairing = pairing;
     game.playerA = playerA;
     game.playerB = playerB;
+    game.playerADepth = depthA > 0 ? depthA : findAi(playerA).depth;
+    game.playerBDepth = depthB > 0 ? depthB : findAi(playerB).depth;
     connect3dBoard board;
-    auto aiA = makeAi(playerA, seed ^ 0xa0761d6478bd642fULL);
-    auto aiB = makeAi(playerB, seed ^ 0xe7037ed1a0b428dbULL);
+    auto aiA = makeAi(playerA, seed ^ 0xa0761d6478bd642fULL, depthA);
+    auto aiB = makeAi(playerB, seed ^ 0xe7037ed1a0b428dbULL, depthB);
     while (!stopRequested) {
         game.winner = board.checkWin();
         auto legal = board.findMoves();
@@ -419,7 +443,7 @@ GameData playGame(const std::string& id, const std::string& pairing, int repeat,
     return game;
 }
 
-struct Task { size_t index; int repeat; std::string pairing; std::string a; std::string b; uint64_t seed; };
+struct Task { size_t index; int repeat; std::string pairing; std::string a; std::string b; int depthA; int depthB; uint64_t seed; };
 struct ColorStandingData {
     int played = 0, wins = 0, draws = 0, losses = 0, points = 0;
     Totals totals;
@@ -470,6 +494,7 @@ int runCommand(const std::map<std::string, std::string>& options) {
     const int requestedThreads = getInt(options, "threads", 2);
     const uint64_t baseSeed = uint64_t(getInt(options, "seed", 1));
     const bool includeSelfPlay = getInt(options, "self-play", 0) != 0;
+    const auto depthOverrides = splitDepthOverrides(getString(options, "depths"));
     if (gamesPerPair < 1 || repeats < 1 || sampleLimit < 0 || requestedThreads < 1) throw std::runtime_error("numeric run options must be positive");
     if (kind != "match" && gamesPerPair % 2 != 0) throw std::runtime_error("batch and tournament game counts must be even");
 
@@ -484,17 +509,20 @@ int runCommand(const std::map<std::string, std::string>& options) {
             for (int game = 0; game < gamesPerPair; ++game) {
                 bool swap = game >= gamesPerPair / 2;
                 tasks.push_back({tasks.size(), repeat, pairing, swap ? entrants[j] : entrants[i], swap ? entrants[i] : entrants[j],
+                    swap ? depthOverrides.contains(entrants[j]) ? depthOverrides.at(entrants[j]) : 0 : depthOverrides.contains(entrants[i]) ? depthOverrides.at(entrants[i]) : 0,
+                    swap ? depthOverrides.contains(entrants[i]) ? depthOverrides.at(entrants[i]) : 0 : depthOverrides.contains(entrants[j]) ? depthOverrides.at(entrants[j]) : 0,
                     baseSeed + tasks.size() * 0x9e3779b9ULL + uint64_t(repeat)});
             }
         }
     } else {
         std::string a = getString(options, "a"), b = getString(options, "b");
+        int depthA = getInt(options, "depth-a", 0), depthB = getInt(options, "depth-b", 0);
         findAi(a); findAi(b); entrants = {a, b};
         int count = kind == "match" ? 1 : gamesPerPair;
         for (int game = 0; game < count; ++game) {
             bool swap = kind != "match" && game >= count / 2;
             tasks.push_back({tasks.size(), 0, a + "__" + b + "__r0", swap ? b : a, swap ? a : b,
-                baseSeed + tasks.size() * 0x9e3779b9ULL});
+                swap ? depthB : depthA, swap ? depthA : depthB, baseSeed + tasks.size() * 0x9e3779b9ULL});
         }
     }
 
@@ -513,7 +541,7 @@ int runCommand(const std::map<std::string, std::string>& options) {
             try {
                 const auto& task = tasks[index];
                 results[index] = playGame("game-" + std::to_string(index + 1), task.pairing, task.repeat,
-                                          task.a, task.b, task.seed, kind == "match");
+                                          task.a, task.b, task.depthA, task.depthB, task.seed, kind == "match");
                 int done = ++completed;
                 emitLine([&](std::ostream& out) { out << "{\"type\":\"progress\",\"completed\":" << done << ",\"total\":" << tasks.size() << '}'; });
             } catch (...) {

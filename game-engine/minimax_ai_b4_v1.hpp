@@ -546,10 +546,11 @@ public:
 
 
 class MinimaxAI_b4_v1 : public AI_base {
+    int searchDepth;
 public:
     std::vector<mm4::TTEntry> tt;
 
-    MinimaxAI_b4_v1() {
+    explicit MinimaxAI_b4_v1(int depth = 9) : searchDepth(depth) {
         tt.resize((1024 * 1024 * 1 + sizeof(mm4::TTEntry)) / sizeof(mm4::TTEntry) ); // 24MB + 1 ttentry 
     }
 
@@ -559,7 +560,7 @@ public:
         b4_v1::connect3dMoveFast bestMove;
         
         // Depth 4 provides a good balance of strength and speed for branching factor 16
-        int depth = 9; 
+        int depth = searchDepth; 
 
         double score = mm4::minimax(adapter, board.getPlayerTurn(), 0, depth, &bestMove, stats, tt);
         

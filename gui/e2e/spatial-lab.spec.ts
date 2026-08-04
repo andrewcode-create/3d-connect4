@@ -9,13 +9,16 @@ test('plays, analyzes, runs a tournament, refreshes, and opens the archive', asy
   await page.getByRole('button', { name: 'New game' }).click();
 
   await page.getByRole('button', { name: 'Match Lab' }).click();
-  await page.getByLabel('Player A · cyan').selectOption('random');
-  await page.getByLabel('Player B · orange').selectOption('random');
+  await page.getByLabel('Player A · cyan').selectOption('b1-v1');
+  await page.getByLabel('Player B · orange').selectOption('b1-v1');
+  await page.getByLabel('Player A depth').fill('1');
+  await page.getByLabel('Player B depth').fill('2');
   await expect(page.getByText('Self-play enabled: each color gets an independent AI instance.')).toBeVisible();
   const runMatch = page.getByRole('button', { name: 'Run match' });
   await expect(runMatch).toBeEnabled();
   await runMatch.click();
   await expect(page.getByText('Results')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/b1-v1 · d1 vs b1-v1 · d2/)).toBeVisible();
 
   await page.getByRole('button', { name: 'Position Lab' }).click();
   await page.getByLabel('Analysis engine').selectOption('heuristic');
@@ -26,8 +29,9 @@ test('plays, analyzes, runs a tournament, refreshes, and opens the archive', asy
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Spatial Lab' })).toBeVisible();
   await page.getByRole('button', { name: 'Tournament' }).click();
-  await page.getByLabel('Minimax AI b2 v1').uncheck();
-  await page.getByLabel('Minimax AI b2 v2').uncheck();
+  await page.getByRole('checkbox', { name: 'Heuristic Bot' }).uncheck();
+  await page.getByRole('checkbox', { name: 'Minimax AI b2 v2' }).uncheck();
+  await page.getByLabel('Minimax AI b2 v1 depth').fill('1');
   await page.getByLabel('Games / pair (even)').fill('2');
   await page.getByLabel('Repeats').fill('1');
   await expect(page.getByLabel('Include self-play · fills matrix diagonal')).toBeChecked();

@@ -17,6 +17,12 @@ function NumberField({ label, value, onChange, min = 1, step = 1 }: { label: str
   return <label><span>{label}</span><input type="number" min={min} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} /></label>;
 }
 
+
+function DepthField({ ai, value, onChange, label }: { ai?: AiInfo; value: number; onChange: (value: number) => void; label: string }) {
+  const configurable = ai?.family === "minimax";
+  return <label className="depth-field"><span>{label}</span><input aria-label={label} type={configurable ? "number" : "text"} min={1} max={12} step={1} disabled={!configurable} value={configurable ? value : "Fixed"} onChange={(event) => onChange(Number(event.target.value))} /></label>;
+}
+
 function SearchCard({ title, report }: { title: string; report?: SearchReport | null }) {
   if (!report) return null;
   return <div className="search-card"><div><span className="eyebrow">{title}</span><strong>Column {report.move}</strong></div>
@@ -102,11 +108,14 @@ export function App() {
   const [analysis, setAnalysis] = useState<{ best: SearchReport; candidates: SearchReport[] } | null>(null);
   const [playerA, setPlayerA] = useState('heuristic');
   const [playerB, setPlayerB] = useState('random');
+  const [matchDepthA, setMatchDepthA] = useState(1);
+  const [matchDepthB, setMatchDepthB] = useState(1);
   const [batchGames, setBatchGames] = useState(10);
   const [runKind, setRunKind] = useState<'match' | 'batch'>('match');
   const [selectedAis, setSelectedAis] = useState<string[]>(['random', 'heuristic', 'b2-v1', 'b2-v2']);
   const [tournamentGames, setTournamentGames] = useState(4);
   const [includeSelfPlay, setIncludeSelfPlay] = useState(true);
+  const [tournamentDepths, setTournamentDepths] = useState<Record<string, number>>({});
   const [repeats, setRepeats] = useState(3);
   const [samples, setSamples] = useState(5);
   const [seed, setSeed] = useState(1);
@@ -131,7 +140,9 @@ export function App() {
 
   useEffect(() => {
     void Promise.all([api.get<AiInfo[]>('/api/ais'), api.inspect([]), api.get<ArchiveRecord[]>('/api/archive')])
-      .then(([loadedAis, initial, stored]) => { setAis(loadedAis); setPosition(initial); setArchives(stored); })
+      .then(([loadedAis, initial, stored]) => { setAis(loadedAis); setPosition(initial); setArchives(stored);
+        setMatchDepthA(loadedAis.find((ai) => ai.id === playerA)?.depth ?? 1); setMatchDepthB(loadedAis.find((ai) => ai.id === playerB)?.depth ?? 1);
+        setTournamentDepths(Object.fromEntries(loadedAis.filter((ai) => ai.family === "minimax").map((ai) => [ai.id, ai.depth ?? 1]))); })
       .catch((error: Error) => setMessage(error.message));
     const activeId = sessionStorage.getItem('connect4-active-job');
     if (activeId) {
@@ -228,7 +239,7 @@ export function App() {
       const result = await launch(config, (event) => {
         if (event.type === 'move') {
           liveMoves.push(event.move);
-          const game: GameRecord = { id: event.gameId, repeat: 0, pairing: 'live', playerA: config.playerA!, playerB: config.playerB!, winner: null, draw: false,
+          const game: GameRecord = { id: event.gameId, repeat: 0, pairing: 'live', playerA: config.playerA!, playerB: config.playerB!, playerADepth: config.depthA, playerBDepth: config.depthB, winner: null, draw: false,
             moves: [...liveMoves], totals: { A: { elapsedMs: 0, nodes: 0, hashCollisions: 0 }, B: { elapsedMs: 0, nodes: 0, hashCollisions: 0 } } };
           setActiveGame(game); setReplayPly(game.moves.length);
         }
@@ -260,6 +271,9 @@ export function App() {
   const interactive = !showingReplay && !activeJob?.status.includes('running') && ((mode === 'position') || (mode === 'play' && position.turn === humanSide));
   const currentMove = activeGame?.moves[Math.max(0, replayPly - 1)];
   const busy = activeJob?.status === 'running' || activeJob?.status === 'queued';
+  const validDepth = (depth: number) => Number.isInteger(depth) && depth >= 1 && depth <= 12;
+  const matchDepthsValid = (ais.find((ai) => ai.id === playerA)?.family !== 'minimax' || validDepth(matchDepthA)) && (ais.find((ai) => ai.id === playerB)?.family !== 'minimax' || validDepth(matchDepthB));
+  const tournamentDepthsValid = selectedAis.every((id) => ais.find((ai) => ai.id === id)?.family !== 'minimax' || validDepth(tournamentDepths[id]));
 
   return <main>
     <header><div className="brand"><div className="brand-mark">4³</div><div><span className="eyebrow">Native AI observatory</span><h1>Spatial Lab</h1></div></div>
@@ -301,23 +315,24 @@ export function App() {
         </>}
 
         {mode === 'match' && <><div className="panel-heading"><span className="eyebrow">Head-to-head</span><h2>Match Lab</h2><p>Watch a full game or benchmark a balanced series.</p></div>
-          <div className="form-grid"><AiSelect ais={ais} value={playerA} onChange={setPlayerA} label="Player A · cyan" /><AiSelect ais={ais} value={playerB} onChange={setPlayerB} label="Player B · orange" /></div>
+          <div className="form-grid"><AiSelect ais={ais} value={playerA} onChange={(id) => { setPlayerA(id); setMatchDepthA(ais.find((ai) => ai.id === id)?.depth ?? 1); }} label="Player A · cyan" /><AiSelect ais={ais} value={playerB} onChange={(id) => { setPlayerB(id); setMatchDepthB(ais.find((ai) => ai.id === id)?.depth ?? 1); }} label="Player B · orange" /></div>
+          <div className="form-grid depth-grid"><DepthField ai={ais.find((ai) => ai.id === playerA)} value={matchDepthA} onChange={setMatchDepthA} label="Player A depth" /><DepthField ai={ais.find((ai) => ai.id === playerB)} value={matchDepthB} onChange={setMatchDepthB} label="Player B depth" /></div>
           <label><span>Run type</span><select value={runKind} onChange={(event) => setRunKind(event.target.value as 'match' | 'batch')}><option value="match">Live single game</option><option value="batch">Balanced batch</option></select></label>
           {runKind === 'batch' && <NumberField label="Games (even)" value={batchGames} min={2} step={2} onChange={setBatchGames} />}
           <RunOptions samples={samples} setSamples={setSamples} seed={seed} setSeed={setSeed} threads={threads} setThreads={setThreads} />
           {playerA === playerB && <p className="self-play-note">Self-play enabled: each color gets an independent AI instance.</p>}
-          <button className="primary full" disabled={busy || (runKind === 'batch' && batchGames % 2 !== 0)} onClick={() => void launchRun({ kind: runKind, playerA, playerB, games: runKind === 'match' ? 1 : batchGames, samples, seed, threads })}>Run {runKind}</button>
+          <button className="primary full" disabled={busy || !matchDepthsValid || (runKind === 'batch' && batchGames % 2 !== 0)} onClick={() => void launchRun({ kind: runKind, playerA, playerB, games: runKind === 'match' ? 1 : batchGames, samples, seed, threads, depthA: ais.find((ai) => ai.id === playerA)?.family === 'minimax' ? matchDepthA : undefined, depthB: ais.find((ai) => ai.id === playerB)?.family === 'minimax' ? matchDepthB : undefined })}>Run {runKind}</button>
           <JobProgress job={activeJob} onCancel={() => void cancelRef.current?.()} />
           {runResult && <Results result={runResult} ais={ais} active={activeGame} setActive={(game) => { setActiveGame(game); setReplayPly(game.moves.length); }} />}
           <SearchCard title={`Ply ${replayPly}`} report={currentMove} />
         </>}
 
         {mode === 'tournament' && <><div className="panel-heading"><span className="eyebrow">Repeated round robin</span><h2>Tournament Lab</h2><p>Balanced colors, repeat variance, deterministic seeds.</p></div>
-          <div className="ai-checks">{ais.map((ai) => <label key={ai.id}><input type="checkbox" checked={selectedAis.includes(ai.id)} onChange={() => setSelectedAis((items) => items.includes(ai.id) ? items.filter((id) => id !== ai.id) : [...items, ai.id])} /><span>{ai.name}</span></label>)}</div>
+          <div className="ai-checks">{ais.map((ai) => <div className="ai-entry" key={ai.id}><label><input type="checkbox" checked={selectedAis.includes(ai.id)} onChange={() => setSelectedAis((items) => items.includes(ai.id) ? items.filter((id) => id !== ai.id) : [...items, ai.id])} /><span>{ai.name}</span></label>{ai.family === "minimax" ? <label className="inline-depth"><span>Depth</span><input aria-label={`${ai.name} depth`} type="number" min="1" max="12" value={tournamentDepths[ai.id] ?? ai.depth ?? 1} disabled={!selectedAis.includes(ai.id)} onChange={(event) => setTournamentDepths((depths) => ({ ...depths, [ai.id]: Number(event.target.value) }))} /></label> : <small>Fixed policy</small>}</div>)}</div>
           <div className="form-grid"><NumberField label="Games / pair (even)" value={tournamentGames} min={2} step={2} onChange={setTournamentGames} /><NumberField label="Repeats" value={repeats} onChange={setRepeats} /></div>
           <RunOptions samples={samples} setSamples={setSamples} seed={seed} setSeed={setSeed} threads={threads} setThreads={setThreads} />
           <label className="check-option"><input type="checkbox" checked={includeSelfPlay} onChange={(event) => setIncludeSelfPlay(event.target.checked)} /><span>Include self-play · fills matrix diagonal</span></label>
-          <button className="primary full" disabled={busy || selectedAis.length < (includeSelfPlay ? 1 : 2) || tournamentGames % 2 !== 0} onClick={() => void launchRun({ kind: 'tournament', aiIds: selectedAis, games: tournamentGames, repeats, samples, seed, threads, includeSelfPlay })}>Start tournament · {(selectedAis.length * (selectedAis.length - 1) / 2 + (includeSelfPlay ? selectedAis.length : 0)) * tournamentGames * repeats} games</button>
+          <button className="primary full" disabled={busy || !tournamentDepthsValid || selectedAis.length < (includeSelfPlay ? 1 : 2) || tournamentGames % 2 !== 0} onClick={() => void launchRun({ kind: 'tournament', aiIds: selectedAis, games: tournamentGames, repeats, samples, seed, threads, includeSelfPlay, depths: Object.fromEntries(selectedAis.filter((id) => ais.find((ai) => ai.id === id)?.family === 'minimax').map((id) => [id, tournamentDepths[id] ?? ais.find((ai) => ai.id === id)?.depth ?? 1])) })}>Start tournament · {(selectedAis.length * (selectedAis.length - 1) / 2 + (includeSelfPlay ? selectedAis.length : 0)) * tournamentGames * repeats} games</button>
           <JobProgress job={activeJob} onCancel={() => void cancelRef.current?.()} />
           {runResult && <Results result={runResult} ais={ais} active={activeGame} heatmap setActive={(game) => { setActiveGame(game); setReplayPly(game.moves.length); }} />}
         </>}
@@ -355,11 +370,12 @@ function CandidateTable({ reports, turn }: { reports: SearchReport[]; turn: Play
 }
 
 function Results({ result, ais, active, heatmap = false, setActive }: { result: RunSummary; ais: AiInfo[]; active: GameRecord | null; heatmap?: boolean; setActive: (game: GameRecord) => void }) {
+  const playerLabel = (id: string, depth?: number) => ais.find((ai) => ai.id === id)?.family === "minimax" && depth ? id + " · d" + depth : id;
   return <div className="results"><div className="result-title"><div><span className="eyebrow">Results</span><strong>{result.completedGames}/{result.totalGames} games</strong></div></div>
     <Standings result={result} ais={ais} />
     {heatmap && <TournamentHeatmap result={result} ais={ais} />}
     {heatmap && <MatchupMatrix result={result} ais={ais} />} 
     {result.sampledGames.length > 0 && <div className="samples"><span>Representative replays</span>{result.sampledGames.map((game) => <button key={`${game.pairing}-${game.id}`} className={active?.id === game.id && active.pairing === game.pairing ? 'active' : ''} onClick={() => setActive(game)}>
-      {game.playerA} vs {game.playerB} · {game.draw ? 'draw' : `${game.winner} win`}</button>)}</div>}
+      {playerLabel(game.playerA, game.playerADepth)} vs {playerLabel(game.playerB, game.playerBDepth)} · {game.draw ? 'draw' : `${game.winner} win`}</button>)}</div>}
   </div>;
 }

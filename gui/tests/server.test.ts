@@ -26,6 +26,7 @@ describe('local API', () => {
   it('validates balanced jobs and completes a native batch', async () => {
     const { app } = await createApi(binary, dataDirectory);
     await request(app).post('/api/jobs').send({ kind: 'batch', playerA: 'random', playerB: 'heuristic', games: 3 }).expect(400);
+    await request(app).post('/api/jobs').send({ kind: 'match', playerA: 'b1-v1', playerB: 'b1-v1', depthA: 13, depthB: 1 }).expect(400);
     const created = await request(app).post('/api/jobs').send({ kind: 'batch', playerA: 'random', playerB: 'heuristic', games: 2, threads: 1 }).expect(202);
     let snapshot = created.body;
     for (let attempt = 0; attempt < 100 && !['complete', 'failed'].includes(snapshot.status); ++attempt) {
@@ -46,7 +47,7 @@ describe('local API', () => {
       expect(matchup.secondWins + matchup.draws + matchup.secondLosses).toBe(matchup.played);
     }
 
-    const selfPlay = await request(app).post('/api/jobs').send({ kind: 'tournament', aiIds: ['random'], games: 2, repeats: 1, threads: 1, includeSelfPlay: true }).expect(202);
+    const selfPlay = await request(app).post('/api/jobs').send({ kind: 'tournament', aiIds: ['b1-v1'], games: 2, repeats: 1, threads: 1, includeSelfPlay: true, depths: { 'b1-v1': 1 } }).expect(202);
     let selfSnapshot = selfPlay.body;
     for (let attempt = 0; attempt < 100 && !['complete', 'failed'].includes(selfSnapshot.status); ++attempt) {
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -54,9 +55,11 @@ describe('local API', () => {
     }
     expect(selfSnapshot.status).toBe('complete');
     expect(selfSnapshot.result.completedGames).toBe(2);
-    expect(selfSnapshot.result.matchups[0]).toMatchObject({ playerA: 'random', playerB: 'random', played: 2 });
-    expect(selfSnapshot.result.sampledGames[0].playerA).toBe('random');
-    expect(selfSnapshot.result.sampledGames[0].playerB).toBe('random');
+    expect(selfSnapshot.result.matchups[0]).toMatchObject({ playerA: 'b1-v1', playerB: 'b1-v1', played: 2 });
+    expect(selfSnapshot.result.sampledGames[0].playerA).toBe('b1-v1');
+    expect(selfSnapshot.result.sampledGames[0].playerADepth).toBe(1);
+    expect(selfSnapshot.result.sampledGames[0].playerB).toBe('b1-v1');
+    expect(selfSnapshot.result.sampledGames[0].playerBDepth).toBe(1);
   });
 
   it('archives safely and ignores corrupted records', async () => {

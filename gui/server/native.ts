@@ -16,6 +16,12 @@ function positiveInteger(value: unknown, fallback: number, label: string) {
   return result;
 }
 
+function searchDepth(value: unknown, label: string) {
+  const depth = positiveInteger(value, 1, label);
+  if (depth > 12) throw new Error(label + ' must be between 1 and 12');
+  return depth;
+}
+
 function nativeArguments(config: JobConfig) {
   if (config.kind === 'ai-move' || config.kind === 'analysis') {
     if (!config.aiId) throw new Error('aiId is required');
@@ -29,9 +35,13 @@ function nativeArguments(config: JobConfig) {
     if (!config.aiIds || config.aiIds.length < (config.includeSelfPlay ? 1 : 2)) throw new Error(config.includeSelfPlay ? 'Self-play tournament needs at least one AI' : 'Tournament needs at least two AIs');
     args.push('--ais', config.aiIds.join(','));
     if (config.includeSelfPlay) args.push('--self-play', '1');
+    const depths = Object.entries(config.depths ?? {});
+    if (depths.length) args.push('--depths', depths.map(([id, depth]) => id + '=' + searchDepth(depth, 'depth for ' + id)).join(','));
   } else {
     if (!config.playerA || !config.playerB) throw new Error('playerA and playerB are required');
     args.push('--a', config.playerA, '--b', config.playerB);
+    if (config.depthA !== undefined) args.push('--depth-a', String(searchDepth(config.depthA, 'depthA')));
+    if (config.depthB !== undefined) args.push('--depth-b', String(searchDepth(config.depthB, 'depthB')));
   }
   return args;
 }
@@ -74,6 +84,8 @@ export class JobManager {
       throw new Error('Balanced runs require an even game count');
     if (config.kind === 'tournament' && new Set(config.aiIds).size !== config.aiIds?.length)
       throw new Error('Tournament entrants must be unique');
+    if (config.depths && (typeof config.depths !== 'object' || Array.isArray(config.depths) || Object.keys(config.depths).some((id) => !config.aiIds?.includes(id))))
+      throw new Error('Tournament depths must reference selected AIs');
     return nativeArguments(config);
   }
 

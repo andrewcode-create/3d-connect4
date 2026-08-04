@@ -44,6 +44,8 @@ export interface GameRecord {
   pairing: string;
   playerA: string;
   playerB: string;
+  playerADepth?: number;
+  playerBDepth?: number;
   winner: Player | null;
   draw: boolean;
   moves: MoveRecord[];
@@ -108,6 +110,9 @@ export interface JobConfig {
   threads?: number;
   candidates?: boolean;
   includeSelfPlay?: boolean;
+  depthA?: number;
+  depthB?: number;
+  depths?: Record<string, number>;
 }
 
 export interface JobSnapshot {
